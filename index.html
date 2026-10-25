@@ -738,7 +738,7 @@ function buildDay(trades){
   const G=new Map();trades.forEach(r=>{const k=r.X+'|'+r.side;if(!G.has(k))G.set(k,[]);G.get(k).push(r)});
   const P=[...G.values()].map(g=>{g.sort((a,b)=>a.E-b.E);const q=g.reduce((a,r)=>a+r.q,0);return {g,side:g[0].side,q,avg:g.reduce((a,r)=>a+r.ep*r.q,0)/q,xp:g[0].xp,X:g[0].X,E:g[0].E,net:+g.reduce((a,r)=>a+r.pnl+r.fee,0).toFixed(2)}}).sort((a,b)=>a.E-b.E||a.X-b.X);
   let cum=0,streak=0,lost=false,stopIdx=-1,ruleTime=null,ruleWhy='',cumStop=0,stopMs=null;const notes=[];
-  P.forEach((x,i)=>{const c=[];if(stopIdx>=0&&i>=stopIdx)c.push(['warn','規則停止後']);if(lost&&x.q>1)c.push(['bad',`虧損後 ${x.q} 口`]);
+  P.forEach((x,i)=>{const c=[];if(stopIdx>=0&&i>=stopIdx)c.push(['warn','規則停止後']);if(cum<=-100&&x.q>1)c.push(['bad',`帳面 -$${Math.round(-cum)} 時 ${x.q} 口`]);
     if(i>0){const pv=P[i-1],gap=(x.E-pv.X)/1000;if(pv.net<0&&pv.side!==x.side&&gap>=0&&gap<=60)c.push(['bad',`停損 ${Math.round(gap)} 秒反手`])}
     cum=+(cum+x.net).toFixed(2);x.cum=cum;if(x.net<0){streak++;lost=true}else streak=0;
     if(stopIdx<0&&(cum<=-500||streak>=3)){stopIdx=i+1;ruleTime=hhmm(x.X);cumStop=cum;stopMs=x.X;ruleWhy=cum<=-500&&streak>=3?'連虧 3 筆＋超過 -$500':cum<=-500?'超過 -$500':'連虧 3 筆';c.push(['bad',ruleWhy])}
@@ -791,7 +791,7 @@ function reviewPrompt(day,bars,info){
     return `部位${k+1} ${p[0]==='Long'?'做多':'放空'} ${p[1]} 口 ${p[6]}→${p[7]} 進場 ${en} 出場 ${p[3]}@${barLab(p[9])} 淨 ${p[4]} 累計 ${p[5]} 標記：${chips}`}).join('\n');
   const lv=[info.prevInfo?`昨收 ${info.prevInfo.c}、昨高 ${info.prevInfo.h}、昨低 ${info.prevInfo.l}`:'',info.onInfo?`夜盤高 ${info.onInfo.h}、夜盤低 ${info.onInfo.l}`:''].filter(Boolean).join('；');
   return `你是使用 Al Brooks 價格行為學的 MES（微型 S&P 500 期貨）日內交易教練，正在幫交易者做盤後檢討。圖是 5 分鐘 K 線，均線是 20 EMA，時間是台灣時間。
-交易者的規則：每日停損 $500；連虧 3 筆就離場；虧損後只能一口。
+交易者的規則：每日停損 $500；連虧 3 筆就離場；帳面虧損超過 $100 時，只能下一口單（先把虧損打平，打平後才解除）。
 價位：${lv||'無'}
 當天美股時段 K 棒：
 ${bl}
@@ -883,7 +883,7 @@ function todayTPE(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'
 const TODAY=todayTPE();
 const CHECKS=[
   ['send','每筆虧損出場後，先把成交紀錄傳給 Claude','傳資料的這段時間就是離開盤面'],
-  ['one','帳面已經有超過 $100 虧損時，只能下一口單','先把虧損打平；打平之前不放大口數'],
+  ['one','帳面虧損超過 $100 時，只能下一口單','先把虧損打平；打平之前不放大口數'],
   ['noadd','部位虧損中不加碼','不攤平；要加碼只能加在賺錢的部位'],
   ['three','連虧 3 筆就離場','照自己的規則，不討價還價'],
   ['stop','今天虧到 $500 就關平台','碰到就收工，不想辦法凹回來']
