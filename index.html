@@ -193,6 +193,24 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .legend.top{padding:10px 14px 0;justify-content:flex-end}
 .legend.top .hover{margin-left:0;margin-right:auto}
 .legend .tog{font-size:12px;color:var(--ink-2)}
+dialog.crop{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1100px,calc(100% - 24px));max-width:none;color:var(--ink);background:var(--panel)}
+dialog.crop::backdrop{background:rgba(21,32,43,.45)}
+dialog.crop .cbody{display:grid;gap:12px;padding:18px}
+dialog.crop h2{margin:0;font-size:17px}
+dialog.crop .cbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+dialog.crop .cbar label{display:inline-flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
+dialog.crop .cdate{display:inline-flex;gap:8px;align-items:center;font-size:14px;font-weight:500}
+dialog.crop .cdate input{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+dialog.crop .cdate input.need{border-color:var(--bear);outline:2px solid var(--bear);outline-offset:1px;box-shadow:0 0 0 5px rgba(207,63,79,.18)}
+dialog.crop .cneed{color:var(--bear);font-size:13px}
+dialog.crop .cfoot{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.cwrap{display:flex;justify-content:center;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:hidden}
+.cstage{position:relative;display:inline-block;line-height:0;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+.cstage img{max-width:100%;max-height:62vh;display:block;pointer-events:none}
+.csel{position:absolute;box-shadow:0 0 0 9999px rgba(10,16,22,.55);outline:2px solid #ffd23f;cursor:move}
+.csel .ch{position:absolute;width:14px;height:14px;background:#ffd23f;border:2px solid #15202b;border-radius:3px}
+.csel .ch[data-c=nw]{left:-8px;top:-8px;cursor:nwse-resize}.csel .ch[data-c=ne]{right:-8px;top:-8px;cursor:nesw-resize}
+.csel .ch[data-c=sw]{left:-8px;bottom:-8px;cursor:nesw-resize}.csel .ch[data-c=se]{right:-8px;bottom:-8px;cursor:nwse-resize}
 .fnav{display:inline-flex;gap:6px;align-items:center}
 .fnav .linkbtn{min-width:32px;text-align:center}
 .fnav .linkbtn:disabled{opacity:.35;cursor:default}
@@ -288,6 +306,29 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
       <button type="submit" class="linkbtn" id="setSave">儲存並重新載入</button>
     </div>
   </form>
+</dialog>
+
+<dialog class="crop" id="cropDlg" aria-labelledby="cropTitle">
+  <div class="cbody">
+    <h2 id="cropTitle">加入前預覽</h2>
+    <div class="cbar" style="justify-content:space-between">
+      <div class="cbar">
+        <label id="cropAutoL"><input type="checkbox" id="cropAuto"> 裁掉右側下單區</label>
+        <button type="button" class="linkbtn" id="cropFull">用整張圖</button>
+        <span class="sub" id="cropInfo"></span>
+      </div>
+      <div class="cbar">
+        <span class="cneed" id="cropDateMsg" role="alert"></span>
+        <label class="cdate" for="cropDate">歸到交易日 <input type="date" id="cropDate"></label>
+      </div>
+    </div>
+    <div class="cwrap"><div class="cstage" id="cropStage"><img id="cropImg" alt="截圖預覽"><div class="csel" id="cropSel"><span class="ch" data-c="nw"></span><span class="ch" data-c="ne"></span><span class="ch" data-c="sw"></span><span class="ch" data-c="se"></span></div></div></div>
+    <p class="sub" style="margin:0">在圖上拖拉可以重新框選要保留的範圍；拖黃框裡面可以移動，拖四個角可以調整大小。</p>
+    <div class="cfoot">
+      <button type="button" class="linkbtn" id="cropCancel">取消</button>
+      <button type="button" class="linkbtn" id="cropOk" style="font-weight:600">確認加入</button>
+    </div>
+  </div>
 </dialog>
 
 <script src="store.js"></script>
@@ -481,10 +522,62 @@ function renderBook(){
 let ASSETS=null,CHARTS=[];const capChain={};
 function figSt(t){const s=$('figSt');if(s)s.textContent=t}
 function latestDay(){const ds=Object.keys(DAYS).sort();return ds.length?ds[ds.length-1]:TODAY}
+/* screenshot crop preview */
+function detectPanel(img){
+  const W=img.naturalWidth,H=img.naturalHeight;if(W<900||H<400)return null;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0);
+  const d=g.getImageData(0,0,W,H).data,P=(x,y)=>(y*W+x)*4;
+  const isG=i=>d[i+1]>120&&d[i+1]-d[i]>45&&d[i+1]-d[i+2]>45,isR=i=>d[i]>150&&d[i]-d[i+1]>70&&d[i]-d[i+2]>70;
+  let btn=null;
+  for(let y=Math.floor(H*.15);y<H*.85&&!btn;y+=2){let x=Math.floor(W*.6);
+    while(x<W){if(!isG(P(x,y))){x++;continue}const s=x;while(x<W&&isG(P(x,y)))x++;const gl=x-s;if(gl<60)continue;
+      let x2=x;while(x2<W&&x2<x+40&&!isR(P(x2,y)))x2++;const s2=x2;while(x2<W&&isR(P(x2,y)))x2++;
+      if(x2-s2>=60&&Math.abs((x2-s2)-gl)<gl*.4){btn={x:s,y};break}}}
+  if(!btn)return null;
+  const y0=Math.floor(H*.07),y1=Math.floor(H*.97);
+  const uniform=x=>{const r=P(x,Math.floor(H/2));let bad=0,n=0;for(let y=y0;y<y1;y+=3){const i=P(x,y);n++;if(Math.abs(d[i]-d[r])+Math.abs(d[i+1]-d[r+1])+Math.abs(d[i+2]-d[r+2])>30)bad++}return bad/n<.04};
+  let x=btn.x-1,seen=false;const lim=Math.max(0,btn.x-260);
+  for(;x>lim;x--){const u=uniform(x);if(u)seen=true;else if(seen)break}
+  if(!seen||x<=lim||x<W*.6)return null;
+  return x+1;
+}
+function cropShot(file){return new Promise(async resolve=>{
+  const url=URL.createObjectURL(file),img=$('cropImg'),dlg=$('cropDlg'),sel=$('cropSel'),stage=$('cropStage'),auto=$('cropAuto'),info=$('cropInfo');
+  const cd=$('cropDate'),cm=$('cropDateMsg');cd.value='';cd.max=TODAY;cd.classList.remove('need');cm.textContent='';
+  img.src=url;try{await img.decode()}catch(e){URL.revokeObjectURL(url);resolve({err:1});return}
+  const W=img.naturalWidth,H=img.naturalHeight;let cut=null;try{cut=detectPanel(img)}catch(e){}
+  const FULL={x:0,y:0,w:W,h:H},AUTO=cut?{x:0,y:0,w:cut,h:H}:FULL;let R={...AUTO},done=false;
+  $('cropAutoL').hidden=!cut;auto.checked=!!cut;
+  const same=(a,b)=>a.x===b.x&&a.y===b.y&&a.w===b.w&&a.h===b.h;
+  const draw=()=>{const k=img.clientWidth/W||1;Object.assign(sel.style,{left:R.x*k+'px',top:R.y*k+'px',width:R.w*k+'px',height:R.h*k+'px'});
+    auto.checked=!!cut&&same(R,AUTO);info.textContent=(same(R,FULL)?'整張圖':'保留')+` ${Math.round(R.w)} × ${Math.round(R.h)}`+(cut?'':'（沒偵測到 TopstepX 下單區，預設不裁）')};
+  const pt=e=>{const b=img.getBoundingClientRect(),k=W/b.width;return{x:Math.max(0,Math.min(W,(e.clientX-b.left)*k)),y:Math.max(0,Math.min(H,(e.clientY-b.top)*k))}};
+  let drag=null;
+  const down=e=>{if(e.button>0)return;e.preventDefault();const p=pt(e),c=e.target.dataset&&e.target.dataset.c;
+    drag=c?{m:'r',c,r:{...R}}:e.target===sel?{m:'m',p,r:{...R}}:{m:'n',p,r:{...R}};stage.setPointerCapture(e.pointerId)};
+  const move=e=>{if(!drag)return;const p=pt(e),MIN=40;
+    if(drag.m==='m'){R.x=Math.max(0,Math.min(W-R.w,drag.r.x+p.x-drag.p.x));R.y=Math.max(0,Math.min(H-R.h,drag.r.y+p.y-drag.p.y))}
+    else if(drag.m==='n'){const x1=Math.min(drag.p.x,p.x),y1=Math.min(drag.p.y,p.y);R={x:x1,y:y1,w:Math.abs(p.x-drag.p.x),h:Math.abs(p.y-drag.p.y)}}
+    else{const o=drag.r;let l=o.x,t=o.y,r=o.x+o.w,b=o.y+o.h;if(drag.c.includes('w'))l=Math.min(p.x,r-MIN);if(drag.c.includes('e'))r=Math.max(p.x,l+MIN);if(drag.c.includes('n'))t=Math.min(p.y,b-MIN);if(drag.c.includes('s'))b=Math.max(p.y,t+MIN);R={x:l,y:t,w:r-l,h:b-t}}
+    draw()};
+  const up=()=>{if(drag&&drag.m==='n'&&(R.w<40||R.h<40))R={...drag.r||AUTO};drag=null;R={x:Math.round(R.x),y:Math.round(R.y),w:Math.round(R.w),h:Math.round(R.h)};draw()};
+  const onAuto=()=>{R=auto.checked?{...AUTO}:{...FULL};draw()},onFull=()=>{R={...FULL};draw()};
+  const finish=async ok=>{if(done)return;done=true;stage.removeEventListener('pointerdown',down);stage.removeEventListener('pointermove',move);stage.removeEventListener('pointerup',up);stage.removeEventListener('pointercancel',up);
+    cd.removeEventListener('input',onDate);auto.removeEventListener('change',onAuto);$('cropFull').removeEventListener('click',onFull);$('cropOk').removeEventListener('click',onOk);$('cropCancel').removeEventListener('click',onCancel);dlg.removeEventListener('close',onClose);window.removeEventListener('resize',draw);
+    let out=null;if(ok){if(same(R,FULL))out=file;else{const c=document.createElement('canvas');c.width=R.w;c.height=R.h;c.getContext('2d').drawImage(img,R.x,R.y,R.w,R.h,0,0,R.w,R.h);
+      const bl=await new Promise(r=>c.toBlob(r,'image/png'));out=bl?new File([bl],'shot.png',{type:'image/png'}):file}}
+    if(dlg.open)dlg.close();img.removeAttribute('src');URL.revokeObjectURL(url);resolve(ok?{file:out,date:cd.value}:null)};
+  const onOk=()=>{if(!cd.value){cd.classList.add('need');cm.textContent='請先選這張圖要歸到哪一個交易日';cd.focus();return}finish(true)},onCancel=()=>finish(false),onClose=()=>finish(false),onDate=()=>{if(cd.value){cd.classList.remove('need');cm.textContent=''}};
+  stage.addEventListener('pointerdown',down);stage.addEventListener('pointermove',move);stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
+  cd.addEventListener('input',onDate);auto.addEventListener('change',onAuto);$('cropFull').addEventListener('click',onFull);$('cropOk').addEventListener('click',onOk);$('cropCancel').addEventListener('click',onCancel);dlg.addEventListener('close',onClose);window.addEventListener('resize',draw);
+  dlg.showModal();requestAnimationFrame(()=>{draw();cd.focus()});
+})}
 async function addShot(file){
   if(!ASSETS||!DB||!file)return;
-  const date=($('noteDate')&&$('noteDate').value)||latestDay();
   if(!/^image\//.test(file.type)){figSt('只能加入圖片檔');return}
+  if($('cropDlg').open)return;
+  figSt('');const res=await cropShot(file);if(!res||res.err){const m=res?'讀不到這張圖':'已取消';figSt(m);setTimeout(()=>{const s=$('figSt');if(s&&s.textContent===m)s.textContent=''},3000);return}
+  file=res.file;const date=res.date;
   figSt('上傳中…');
   try{const r=await ASSETS.upload(file);const id='c'+Date.now();noteIdx=0;noteFilter=noteFilter&&noteFilter!==date?'':noteFilter;await DB.doc('charts/'+id).set({date,asset:r.id,caption:'',lessons:[],createdAt:new Date().toISOString()});figSt('已加入 '+date.slice(5).replace('-','/'));analyzeShot(id,file,false)}
   catch(e){figSt(({too_large:'檔案超過 20 MB',unsupported_type:'只支援 PNG、JPG、GIF、WebP',quota_or_state:'儲存空間已滿',rate_limited:'太頻繁了，稍後再試',not_granted:'這個檢視不能上傳'})[e&&e.code]||'上傳失敗，稍後再試')}
@@ -496,11 +589,11 @@ function renderNotesBar(){
   const body=$('notesBody');if($('figList'))return;
   body.replaceChildren();
   const bar=h('section','panel box');const row=h('div','fig-head');
-  const left=h('div','acts');const fl=h('label','sub','顯示');fl.htmlFor='noteFilter';const sel=document.createElement('select');sel.id='noteFilter';sel.addEventListener('change',()=>{noteFilter=sel.value;noteIdx=0;fillCharts()});left.append(fl,sel);
-  const right=h('div','acts');const st=h('span','prog');st.id='figSt';right.append(st);
+  const left=h('div','acts');const fl=h('label','sub','顯示');fl.htmlFor='noteFilter';fl.style.marginRight='8px';const sel=document.createElement('select');sel.id='noteFilter';sel.addEventListener('change',()=>{noteFilter=sel.value;noteIdx=0;fillCharts()});left.append(fl,sel);
+  const right=h('div','acts');const st=h('span','prog');st.id='figSt';st.style.marginRight='14px';right.append(st);
   if(ASSETS){const dl=h('label','sub','歸到交易日');dl.htmlFor='noteDate';const di=document.createElement('input');di.type='date';di.id='noteDate';di.value=latestDay();di.style.cssText='font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px';
     const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg,image/gif,image/webp';inp.id='figFile';inp.hidden=true;inp.addEventListener('change',()=>{const f=inp.files&&inp.files[0];inp.value='';addShot(f)});
-    const b=h('label','linkbtn','加入截圖');b.htmlFor='figFile';b.tabIndex=0;b.setAttribute('role','button');b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}});right.append(dl,di,inp,b)}
+    const b=h('label','linkbtn','加入截圖');b.htmlFor='figFile';b.tabIndex=0;b.setAttribute('role','button');b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}});right.append(inp,b)}
   row.append(left,right);bar.append(row);
   if(ASSETS){
     const pz=h('div','paste');pz.contentEditable='true';pz.setAttribute('role','textbox');pz.setAttribute('aria-label','貼上截圖');pz.dataset.ph='點這裡，再按 Ctrl+V（Mac 用 ⌘+V）或右鍵「貼上」加入截圖；也可以把圖片拖進來';
