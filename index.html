@@ -882,12 +882,11 @@ function biasCard(){
 function todayTPE(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}catch(e){return new Date().toISOString().slice(0,10)}}
 const TODAY=todayTPE();
 const CHECKS=[
-  ['limit','TopstepX 的 MES 口數上限已設好','Settings → Risk → Contract Limits，超過上限的單會被平台擋下'],
-  ['one','下單面板預設 1 口','快捷按鈕只留小口數，避免一鍵下大單'],
-  ['stop','今天虧到 $500 就關平台','碰到就收工，不想辦法凹回來'],
-  ['noadd','部位虧損中不加碼','不攤平；要加碼只能加在賺錢的部位'],
   ['send','每筆虧損出場後，先把成交紀錄傳給 Claude','傳資料的這段時間就是離開盤面'],
-  ['three','連虧 3 筆就離場','照自己的規則，不討價還價']
+  ['one','帳面已經有超過 $100 虧損時，只能下一口單','先把虧損打平；打平之前不放大口數'],
+  ['noadd','部位虧損中不加碼','不攤平；要加碼只能加在賺錢的部位'],
+  ['three','連虧 3 筆就離場','照自己的規則，不討價還價'],
+  ['stop','今天虧到 $500 就關平台','碰到就收工，不想辦法凹回來']
 ];
 let PRE=null,preChain=Promise.resolve(),preDirty=false;
 function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textContent=t})}
