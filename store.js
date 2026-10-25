@@ -13,7 +13,7 @@
     set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} },
   };
   const K = { gh: 'mj-gh-token', ai: 'mj-anthropic-key', model: 'mj-model', repo: 'mj-repo' };
-  const DEFAULT_MODEL = 'claude-sonnet-5-5';
+  const DEFAULT_MODEL = 'claude-opus-5-5';
 
   function repoFromLocation() {
     const o = LS.get(K.repo);
