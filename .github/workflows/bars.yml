@@ -1,0 +1,52 @@
+name: 補 K 線
+
+on:
+  push:
+    branches: [main]
+    paths: ['data/days/**']
+  schedule:
+    # 美股收盤後（夏令 20:15 UTC、冬令 21:15 UTC），再補一次以防 Yahoo 延遲
+    - cron: '17 20,21,23 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '指定交易日（YYYY-MM-DD，留空＝所有缺 K 線的日子）'
+        required: false
+      force:
+        description: '已經有 K 線也重抓'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bars
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 抓 Yahoo MES 5 分 K
+        env:
+          DATE: ${{ inputs.date }}
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: node scripts/fetch-bars.mjs $DATE $FORCE
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/days
+          if git diff --cached --quiet; then echo '沒有變更'; exit 0; fi
+          git commit -m "bars: 補 K 線 $(git diff --cached --name-only | sed 's#data/days/##;s#\.json##' | paste -sd' ')"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((i*5))
+          done
+          exit 1

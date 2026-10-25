@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https://raw.githubusercontent.com; connect-src blob: https://api.github.com https://raw.githubusercontent.com https://api.anthropic.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>MES 交易日誌</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+TC:wght@400;500&family=Barlow+Condensed:wght@500&display=swap">
+<style>
+/* layout: header with tabs; daily review = verdict strip, chart beside position ledger, rule notes; overview = daily table + net bars; handbook = rules + case cards */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#15202b; --ink-2:#4d5b68; --ink-3:#8593a0;
+  --grid:#e2e7eb; --line:#cfd6dc; --bull:#13896b; --bear:#cf3f4f; --ema:#2b6fd6; --level:#9aa5af;
+  --warn:#b8700d; --warn-bg:#fbf1e1; --stop-bg:rgba(207,63,79,.06);
+  --f-sans:"IBM Plex Sans TC","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --f-num:"Barlow Condensed","IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1418; --panel:#161d23; --ink:#e6ebef; --ink-2:#a9b5bf; --ink-3:#6f7d89;
+  --grid:#222c34; --line:#2c3842; --bull:#2fb88f; --bear:#ec6170; --ema:#5c97ef; --level:#5d6a75;
+  --warn:#e7a441; --warn-bg:#2a2214; --stop-bg:rgba(236,97,112,.08); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1418; --panel:#161d23; --ink:#e6ebef; --ink-2:#a9b5bf; --ink-3:#6f7d89;
+  --grid:#222c34; --line:#2c3842; --bull:#2fb88f; --bear:#ec6170; --ema:#5c97ef; --level:#5d6a75;
+  --warn:#e7a441; --warn-bg:#2a2214; --stop-bg:rgba(236,97,112,.08); color-scheme:dark}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.6}
+.wrap{max-width:1440px;margin:0 auto;padding-block:18px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+h1{font-size:20px;font-weight:500;margin:0;text-wrap:balance}
+h2{font-size:13px;font-weight:500;letter-spacing:.04em;color:var(--ink-2);margin:0}
+h3{font-size:16px;font-weight:500;margin:0}
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs button{font:500 14px var(--f-sans);border:0;background:transparent;color:var(--ink-2);padding:6px 14px;border-radius:7px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.tabs button:focus-visible,select:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.daybar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+select{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.sub{color:var(--ink-2);font-size:13px;margin:0;max-width:72ch}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat .k{font-size:12px;color:var(--ink-3)}
+.stat .v{font-family:var(--f-num);font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat .v small{font-family:var(--f-sans);font-size:12px;color:var(--ink-3);margin-left:4px}
+.stat.alert{border-color:var(--warn);background:var(--warn-bg)}
+.neg{color:var(--bear)}.pos{color:var(--bull)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.chart{padding:10px 8px 4px;overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:640px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-2);padding:0 10px 10px;align-items:center}
+.legend i{display:inline-block;margin-right:5px;vertical-align:-1px}
+.hover{margin-left:auto;font-family:var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,300px);gap:16px;align-items:stretch}
+.ledger{position:relative;min-height:0;overflow:hidden;order:2}
+.ledger-scroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain}
+.ledger-head{position:sticky;top:0;z-index:1;background:var(--panel);padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tog{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);cursor:pointer;user-select:none}
+.tog input{appearance:none;-webkit-appearance:none;width:30px;height:18px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;margin:0;transition:background .15s}
+.tog input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--panel);transition:transform .15s}
+.tog input:checked{background:var(--bull)}
+.tog input:checked::after{transform:translateX(12px)}
+.tog input:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"n m pl" "n s s" "n t t";gap:2px 10px;align-items:start;padding:10px 14px;border-top:1px solid var(--grid);cursor:pointer;font-size:13px}
+.row:hover,.row.on{background:var(--warn-bg)}
+.row:focus-visible{outline:2px solid var(--warn);outline-offset:-2px}
+.row .n{grid-area:n;font-family:var(--f-num);font-size:20px;line-height:1}
+.row .m{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.row .time{grid-area:m}
+.row .pl{grid-area:pl;font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.row .meta{grid-area:s;display:flex;gap:10px;flex-wrap:wrap}
+.row .txt{grid-area:t;min-width:0;color:var(--ink-2);margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px}
+.chip{font-size:11px;padding:0 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.chip.bad{color:var(--bear)}.chip.ok{color:var(--bull)}.chip.warn{color:var(--warn)}
+.side-l{color:var(--bull)}.side-s{color:var(--bear)}
+.memo{display:grid;gap:2px;padding:0 14px 12px}
+.memo-st{font-size:11px;color:var(--ink-3);text-align:right;order:2}
+.memo-st:empty{display:none}
+.memo textarea{width:100%;box-sizing:border-box;font:13px/1.5 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
+.memo textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
+.memo textarea:disabled{opacity:.6}
+.divider{padding:8px 14px;font-size:12px;color:var(--bear);background:var(--stop-bg);border-top:1px solid var(--grid)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.box{padding:14px 16px;display:grid;gap:8px;align-content:start}
+.box p{margin:0;max-width:68ch;color:var(--ink-2)}
+.box ol,.box ul{margin:0;padding-left:20px;color:var(--ink-2);display:grid;gap:6px}
+.box b{font-weight:500;color:var(--ink)}
+table.cmp{border-collapse:collapse;font-size:13px;width:100%}
+table.cmp td{padding:6px 0;border-top:1px solid var(--grid)}
+table.cmp td:last-child{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tbl-wrap{overflow-x:auto}
+table.days{border-collapse:collapse;font-size:13px;width:100%;min-width:720px}
+table.days th{font-weight:500;color:var(--ink-3);font-size:12px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+table.days td{padding:9px 12px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+table.days td.num{font-family:var(--f-mono);text-align:right}
+table.days th.num{text-align:right}
+table.days tr.link{cursor:pointer}
+table.days tr.link:hover{background:var(--warn-bg)}
+.cases{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.case{padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case .when{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.case dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;margin:0;font-size:13px}
+.case dt{color:var(--ink-3)}
+.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.case p{margin:0;font-size:13px;color:var(--ink-2)}
+.case .src{font-size:12px;color:var(--ink-3)}
+.linkbtn{font:500 13px var(--f-sans);background:none;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:4px 10px;cursor:pointer;justify-self:start}
+.linkbtn:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.rule{padding:12px 14px;display:grid;gap:2px}
+.rule .num{font-family:var(--f-num);font-size:28px;line-height:1}
+.rule .d{font-size:13px;color:var(--ink-2)}
+.pre-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+.pre-col{display:grid;gap:16px}
+.pre-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+.pre-head .date{font-family:var(--f-mono);font-size:13px;color:var(--ink-3)}
+.focus{border-color:var(--warn);background:var(--warn-bg)}
+.focus .big{font-size:18px;font-weight:500;line-height:1.5;margin:0;color:var(--ink)}
+.quote{display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;padding:8px 0;border-top:1px solid var(--grid);font-size:13px}
+.quote:first-of-type{border-top:0}
+.quote .qn{font-family:var(--f-num);font-size:18px;line-height:1.2;color:var(--ink-3)}
+.quote .qt{white-space:pre-wrap;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+.quote mark{background:transparent;color:var(--bear);font-weight:500}
+.checks{display:grid;gap:2px}
+.check{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;align-items:start;padding:7px 0;border-top:1px solid var(--grid);cursor:pointer;font-size:14px}
+.check:first-child{border-top:0}
+.check input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--bull);cursor:pointer}
+.check.done span{color:var(--ink-3);text-decoration:line-through}
+.check small{display:block;font-size:12px;color:var(--ink-3);text-decoration:none}
+.prog{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.plan textarea{width:100%;box-sizing:border-box;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
+.plan textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
+.mini{display:grid;gap:6px}
+.mini .it{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;font-size:13px;padding:6px 0;border-top:1px solid var(--grid)}
+.mini .it:first-child{border-top:0}
+.mini .it b{font-weight:500}
+.mini .it span{color:var(--ink-2)}
+@media (max-width:760px){.pre-grid{grid-template-columns:minmax(0,1fr)}}
+.figs{display:grid;gap:16px}
+.fig{gap:10px}
+.zoom{display:grid;gap:6px}
+.zstage{position:relative;overflow:hidden;border-radius:8px;border:1px solid var(--line);background:var(--bg);touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.zoom.zoomed .zstage{cursor:grab;touch-action:none}
+.zoom.dragging .zstage{cursor:grabbing}
+.zbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--ink-3)}
+.zbar button{font:500 13px var(--f-mono);min-width:32px;padding:2px 8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;cursor:pointer}
+.zbar button:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.zbar .zl{font-family:var(--f-mono);min-width:44px;text-align:center;color:var(--ink-2)}
+.fig img{display:block;width:100%;height:auto;transform-origin:0 0;pointer-events:none}
+.fig .lessons{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px;color:var(--ink)}
+.fig .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cap{width:100%;box-sizing:border-box;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
+.cap:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
+.paste{border:1.5px dashed var(--line);border-radius:8px;padding:22px 16px;text-align:center;color:var(--ink-3);font-size:14px;cursor:text;outline:none;caret-color:transparent;transition:background .15s,border-color .15s}
+.paste:empty::before{content:attr(data-ph)}
+.paste:focus,.paste.over{border-color:var(--warn);background:var(--warn-bg);color:var(--ink-2)}
+@media (prefers-reduced-motion: reduce){.paste{transition:none}}
+.capview{white-space:pre-wrap;font-size:14px;line-height:1.6;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);cursor:text;min-height:1.6em;overflow-wrap:anywhere;color:var(--ink)}
+.capview:hover{border-color:var(--ink-3)}
+.capview:focus-visible{outline:2px solid var(--warn);outline-offset:0}
+.capview .red{color:var(--bear);font-weight:500}
+.capview .ph{color:var(--ink-3)}
+.captools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lhead{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.lhead .acts{gap:8px}
+.lhead .linkbtn{font:500 13px/1.5 var(--f-sans);letter-spacing:.04em;padding:1px 10px}
+.imp{padding:14px 16px;display:grid;gap:10px}
+.imp textarea{width:100%;box-sizing:border-box;font:13px/1.5 var(--f-mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:vertical;min-height:140px}
+.imp textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
+.imp .row2{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.imp .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.imp .sum div{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ink-3)}
+.imp .sum b{display:block;font:500 18px var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.imp .err{color:var(--bear);font-size:13px;margin:0}
+.linkbtn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.bias-opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.bias-opt{display:grid;gap:2px;text-align:left;font:400 13px var(--f-sans);color:var(--ink-2);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.bias-opt b{font:500 18px var(--f-sans);color:var(--ink)}
+.bias-opt.on{border:2px solid var(--warn);padding:9px 11px;background:var(--panel)}
+.bias-opt.on b{color:var(--warn)}
+.bias-opt:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+@media (max-width:520px){.bias-opts{grid-template-columns:minmax(0,1fr)}}
+.legend.top{padding:10px 14px 0;justify-content:flex-end}
+.legend.top .hover{margin-left:0;margin-right:auto}
+.legend .tog{font-size:12px;color:var(--ink-2)}
+.fnav{display:inline-flex;gap:6px;align-items:center}
+.fnav .linkbtn{min-width:32px;text-align:center}
+.fnav .linkbtn:disabled{opacity:.35;cursor:default}
+.linkbtn.danger{color:var(--bear);border-color:currentColor}
+.fig-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.principles{margin:0;padding-left:20px;display:grid;gap:6px;color:var(--ink)}
+.principles .d{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);margin-left:6px}
+.empty{padding:28px 20px;color:var(--ink-2);text-align:center}
+.note{font-size:12px;color:var(--ink-3);margin:0}
+@media (max-width:760px){
+  .cols,.split{grid-template-columns:minmax(0,1fr)}
+  .ledger-scroll{position:static;max-height:65vh}
+}
+@media (prefers-reduced-motion: reduce){.tog input,.tog input::after{transition:none}}
+.gear{display:inline-flex;align-items:center;gap:8px}
+.sync{font:500 12px var(--f-mono);color:var(--ink-3)}
+.sync.err{color:var(--bear)}
+.sync.warn{color:var(--warn)}
+dialog.set{border:1px solid var(--line);border-radius:12px;padding:0;max-width:560px;width:calc(100% - 32px);color:var(--ink);background:var(--panel)}
+dialog.set::backdrop{background:rgba(21,32,43,.35)}
+dialog.set form{display:grid;gap:14px;padding:20px}
+dialog.set h2{margin:0;font-size:17px}
+dialog.set label{display:grid;gap:5px;font-size:13px;color:var(--ink-2)}
+dialog.set input{font:400 14px var(--f-mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;box-sizing:border-box}
+dialog.set .hint{font-size:12px;color:var(--ink-3);line-height:1.6;margin:0}
+dialog.set .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <h1>MES 交易日誌</h1>
+    <div class="tabs" role="tablist" aria-label="日誌分頁">
+      <button role="tab" id="tab-pre" aria-selected="false" aria-controls="view-pre">盤前提醒</button>
+      <button role="tab" id="tab-day" aria-selected="true" aria-controls="view-day">每日檢討</button>
+      <button role="tab" id="tab-notes" aria-selected="false" aria-controls="view-notes">圖解筆記</button>
+      <button role="tab" id="tab-over" aria-selected="false" aria-controls="view-over">趨勢總覽</button>
+      <button role="tab" id="tab-book" aria-selected="false" aria-controls="view-book">交易手冊</button>
+    </div>
+    <div class="gear"><span class="sync" id="syncSt" role="status"></span><button type="button" class="linkbtn" id="setBtn">設定</button></div>
+  </div>
+
+  <section id="view-pre" role="tabpanel" aria-labelledby="tab-pre" hidden style="gap:16px">
+    <div id="preBody"><div class="panel empty">正在讀取日誌資料。</div></div>
+  </section>
+
+  <section id="view-day" role="tabpanel" aria-labelledby="tab-day" style="display:grid;gap:16px">
+    <div class="daybar">
+      <label for="daySel" class="sub">交易日</label>
+      <select id="daySel" disabled><option>載入中…</option></select>
+      <p class="sub" id="dayHint">時間為台灣時間。▲ 買進、▼ 放空、圓點是出場。右邊開關打開才顯示全部部位，關閉時點選哪一筆就只顯示哪一筆。</p>
+      <button type="button" class="linkbtn" id="importBtn" style="margin-left:auto">＋ 新增交易日</button>
+    </div>
+    <div id="importWrap"></div>
+    <div id="dayBody"><div class="panel empty">正在讀取日誌資料。收盤後把成交紀錄貼給 Claude，新的交易日就會出現在這裡。</div></div>
+  </section>
+
+  <section id="view-notes" role="tabpanel" aria-labelledby="tab-notes" hidden style="gap:16px">
+    <div id="notesBody" style="display:grid;gap:16px"><div class="panel empty">正在讀取圖解筆記。</div></div>
+  </section>
+
+  <section id="view-over" role="tabpanel" aria-labelledby="tab-over" hidden style="gap:16px">
+    <div id="overBody"><div class="panel empty">正在讀取日誌資料。</div></div>
+  </section>
+
+  <section id="view-book" role="tabpanel" aria-labelledby="tab-book" hidden style="gap:16px">
+    <div id="bookBody"><div class="panel empty">正在讀取交易手冊。</div></div>
+  </section>
+
+  <p class="note">K 線為 Yahoo 的 MES 連續合約 5 分鐘資料，EMA 為 20 根指數移動平均，和平台數值可能差幾毛。這是交易紀錄與複盤，不是交易建議。</p>
+</div>
+
+<dialog class="set" id="setDlg" aria-labelledby="setTitle">
+  <form method="dialog" id="setForm">
+    <h2 id="setTitle">設定（只存在這台電腦的瀏覽器）</h2>
+    <label>GitHub token
+      <input type="password" id="setGh" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+    </label>
+    <p class="hint">到 GitHub → Settings → Developer settings → Fine-grained tokens 建立：Repository access 只選 <b id="setRepo"></b>，Permissions 的 Contents 選 Read and write，其他都不用。沒填就是唯讀，只能看不能存。</p>
+    <label>Anthropic API key（圖解筆記整理注意事項、逐筆檢討用）
+      <input type="password" id="setAi" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+    </label>
+    <label>模型
+      <input type="text" id="setModel" autocomplete="off" spellcheck="false">
+    </label>
+    <p class="hint">key 在 console.anthropic.com 建立，按次計費，和 claude.ai 訂閱分開；建議在 console 設每月花費上限。兩個金鑰都只存在這個瀏覽器，不會上傳到 repo，別在公用電腦上填。</p>
+    <p class="msg" id="setMsg" role="status"></p>
+    <div class="row">
+      <button type="button" class="linkbtn danger" id="setClear">清除金鑰</button>
+      <button type="button" class="linkbtn" id="setCancel">取消</button>
+      <button type="submit" class="linkbtn" id="setSave">儲存並重新載入</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="store.js"></script>
+<script>
+const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
+const fmt=v=>Number(v).toFixed(2);
+const money=v=>(v<0?'-':'+')+'$'+Math.abs(Number(v)).toFixed(2);
+const h=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+let showPrev=true;try{showPrev=localStorage.getItem('journal-prev')!=='0'}catch(e){}
+let DB=null,DAYS={},CUR=null,REV={},RULES=null,CASES=[],MEMO={},showAll=false,active=null,groups=[];
+
+/* tabs */
+const TABS=[['tab-pre','view-pre'],['tab-day','view-day'],['tab-notes','view-notes'],['tab-over','view-over'],['tab-book','view-book']];
+function showTab(id){TABS.forEach(([t,v])=>{const on=t===id;$(t).setAttribute('aria-selected',on);$(v).hidden=!on;if(on){$(v).style.display='grid';$(v).querySelectorAll('textarea').forEach(grow)}});try{localStorage.setItem('journal-tab',id)}catch(e){}}
+TABS.forEach(([t])=>$(t).addEventListener('click',()=>showTab(t)));
+try{const t=localStorage.getItem('journal-tab');if(t&&$(t))showTab(t)}catch(e){}
+
+/* chart */
+function drawChart(svg,day,hov){
+  svg.replaceChildren();
+  const el=(t,a,txt,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;(p||svg).appendChild(e);return e};
+  const PREV=(showPrev&&day.prevBars)||[],off=PREV.length?PREV.length+2:0,BARS=day.bars||[],FILLS=day.fills||[],POS=day.pos||[],LEVELS=day.levels||[],openMin=day.openMin??(21*60+30);
+  const tlabel=m=>{const t=openMin+m,hh=Math.floor(t/60)%24;return hh+':'+String(t%60).padStart(2,'0')};
+  const L=58,R=900,T=14,B=392,PT=448,PB=556,ND=Math.max(BARS.length,78),N=off+ND,w=(R-L)/N;
+  let lo=Infinity,hi=-Infinity;PREV.concat(BARS).forEach(b=>{lo=Math.min(lo,b[2]);hi=Math.max(hi,b[1])});LEVELS.forEach(([p])=>{lo=Math.min(lo,p);hi=Math.max(hi,p)});FILLS.forEach(x=>{lo=Math.min(lo,x[3],x[5]);hi=Math.max(hi,x[3],x[5])});lo-=3;hi+=3;
+  const X=m=>L+w*(off+m/5),XT=m=>X(Math.max(0,Math.min(m,ND*5))),XB=i=>L+w*(off+i)+w/2,XP=i=>L+w*i+w/2,Y=p=>T+(hi-p)/(hi-lo)*(B-T);
+  const step=(hi-lo)>140?20:10;
+  for(let p=Math.ceil(lo/step)*step;p<=hi;p+=step){el('line',{x1:L,x2:R,y1:Y(p),y2:Y(p),stroke:'var(--grid)'});el('text',{x:L-6,y:Y(p)+4,'text-anchor':'end','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},p)}
+  LEVELS.forEach(([p,t])=>{el('line',{x1:L,x2:R,y1:Y(p),y2:Y(p),stroke:'var(--level)','stroke-dasharray':'4 3'});el('text',{x:R+6,y:Y(p)+4,'font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},t+' '+p)});
+  if(PREV.length){PREV.forEach((b,i)=>{const up=b[3]>=b[0],c=up?'var(--bull)':'var(--bear)',x=XP(i);el('line',{x1:x,x2:x,y1:Y(b[1]),y2:Y(b[2]),stroke:c,opacity:.6});el('rect',{x:x-w*.34,y:Y(Math.max(b[0],b[3])),width:w*.68,height:Math.max(1,Math.abs(Y(b[0])-Y(b[3]))),fill:c,opacity:.6})});
+    if(PREV[0].length>4)el('polyline',{points:PREV.map((b,i)=>XP(i)+','+Y(b[4])).join(' '),fill:'none',stroke:'var(--ema)','stroke-width':1.6,'stroke-linejoin':'round'});
+    const sx=L+w*(off-1);el('line',{x1:sx,x2:sx,y1:T,y2:B,stroke:'var(--line)','stroke-dasharray':'2 3'});
+    for(let i=0;i<PREV.length;i+=12){el('text',{x:XP(i),y:B+14,'text-anchor':'middle','font-size':10,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},'#'+(i+1)+' '+tlabel(i*5))}}
+  BARS.forEach((b,i)=>{const up=b[3]>=b[0],c=up?'var(--bull)':'var(--bear)',x=XB(i);el('line',{x1:x,x2:x,y1:Y(b[1]),y2:Y(b[2]),stroke:c,opacity:.6});el('rect',{x:x-w*.34,y:Y(Math.max(b[0],b[3])),width:w*.68,height:Math.max(1,Math.abs(Y(b[0])-Y(b[3]))),fill:c,opacity:.6})});
+  if(BARS.length&&BARS[0].length>4)el('polyline',{points:BARS.map((b,i)=>XB(i)+','+Y(b[4])).join(' '),fill:'none',stroke:'var(--ema)','stroke-width':1.6,'stroke-linejoin':'round'});
+  const cx=X(78*5);el('line',{x1:cx,x2:cx,y1:T,y2:B,stroke:'var(--line)'});el('text',{x:cx+3,y:T+10,'font-size':10,fill:'var(--ink-3)'},'收盤');
+  if(day.stopMin!=null){const sx=X(day.stopMin);el('line',{x1:sx,x2:sx,y1:T,y2:PB,stroke:'var(--bear)','stroke-width':1.5});el('text',{x:sx+5,y:T+12,'font-size':11,'font-weight':500,fill:'var(--bear)'},(day.stopLabel||'規則觸發'))}
+  for(let i=0;i<ND;i+=(off?12:6)){el('text',{x:XB(i),y:B+14,'text-anchor':'middle','font-size':10,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},'#'+(i+1)+' '+tlabel(i*5))}
+  const gs=POS.map((p,k)=>el('g',{'data-pos':k}));
+  FILLS.forEach(f=>{const [k,s,em,ep,xm,xp]=f,g=gs[k];if(!g)return;const net=POS[k][4],col=net>=0?'var(--bull)':'var(--bear)';
+    el('line',{x1:XT(em),y1:Y(ep),x2:XT(xm),y2:Y(xp),stroke:col,'stroke-width':1,'stroke-dasharray':'3 3',opacity:.7},null,g);
+    const x=XT(em),y=Y(ep),sz=5;
+    if(s==='L')el('path',{d:`M${x},${y-sz} L${x+sz},${y+sz} L${x-sz},${y+sz} Z`,fill:'var(--bull)',stroke:'var(--panel)','stroke-width':1},null,g);
+    else el('path',{d:`M${x},${y+sz} L${x+sz},${y-sz} L${x-sz},${y-sz} Z`,fill:'var(--bear)',stroke:'var(--panel)','stroke-width':1},null,g)});
+  POS.forEach((p,k)=>{const fs=FILLS.filter(f=>f[0]===k);if(!fs.length)return;const g=gs[k],col=p[4]>=0?'var(--bull)':'var(--bear)';
+    el('circle',{cx:XT(fs[0][4]),cy:Y(fs[0][5]),r:4.5,fill:'var(--panel)',stroke:col,'stroke-width':2},null,g);
+    const f0=fs.reduce((a,b)=>b[2]<a[2]?b:a),ly=p[0]==='Long'?Y(f0[3])+20:Y(f0[3])-12,lx=XT(f0[2]);
+    el('rect',{x:lx-9,y:ly-11,width:18,height:15,rx:4,fill:'var(--panel)',stroke:col},null,g);
+    el('text',{x:lx,y:ly,'text-anchor':'middle','font-size':11,'font-weight':500,fill:'var(--ink)'},k+1,g)});
+  const cums=POS.map(p=>p[5]),pmin=Math.min(-550,...cums)-30,pmax=Math.max(100,...cums)+30,PY=v=>PT+(pmax-v)/(pmax-pmin)*(PB-PT);
+  el('text',{x:L,y:PT-6,'font-size':11,fill:'var(--ink-2)'},'已實現損益（含手續費）');
+  [[0,'0'],[-500,'-500']].forEach(([v,t])=>{el('line',{x1:L,x2:R,y1:PY(v),y2:PY(v),stroke:v?'var(--bear)':'var(--line)','stroke-dasharray':v?'4 3':''});el('text',{x:L-6,y:PY(v)+4,'text-anchor':'end','font-size':11,'font-family':'var(--f-mono)',fill:v?'var(--bear)':'var(--ink-3)'},t)});
+  let pts=[[X(0),PY(0)]],prev=0;POS.forEach((p,k)=>{const f=FILLS.find(f=>f[0]===k);if(!f)return;pts.push([XT(f[4]),PY(prev)],[XT(f[4]),PY(p[5])]);prev=p[5]});pts.push([R,PY(prev)]);
+  el('polyline',{points:pts.map(p=>p.join(',')).join(' '),fill:'none',stroke:'var(--ink)','stroke-width':1.6});
+  POS.forEach((p,k)=>{const f=FILLS.find(f=>f[0]===k);if(f)el('circle',{cx:XT(f[4]),cy:PY(p[5]),r:2.5,fill:p[4]>=0?'var(--bull)':'var(--bear)'})});
+  PREV.forEach((b,i)=>{const r=el('rect',{x:L+w*i,y:T,width:w,height:B-T,fill:'transparent'});r.addEventListener('mouseenter',()=>{tip(XP(i),`#${i+1}　${tlabel(i*5)}`);hov.textContent=`#${i+1} ${tlabel(i*5)}  開 ${fmt(b[0])} 高 ${fmt(b[1])} 低 ${fmt(b[2])} 收 ${fmt(b[3])}`})});
+  BARS.forEach((b,i)=>{const r=el('rect',{x:L+w*(off+i),y:T,width:w,height:B-T,fill:'transparent'});r.addEventListener('mouseenter',()=>{tip(XB(i),`#${i+1}　${tlabel(i*5)}`);hov.textContent=`#${i+1} ${tlabel(i*5)}  開 ${fmt(b[0])} 高 ${fmt(b[1])} 低 ${fmt(b[2])} 收 ${fmt(b[3])}${b.length>4?'  EMA '+fmt(b[4]):''}`})});
+  gs.forEach(g=>svg.appendChild(g));
+  const tg=el('g',{'pointer-events':'none',visibility:'hidden'}),tl=el('line',{y1:T,y2:B,stroke:'var(--ink-3)','stroke-width':1,'stroke-dasharray':'2 2'},null,tg),tr=el('rect',{y:T-2,height:18,rx:4,fill:'var(--ink)'},null,tg),tt=el('text',{y:T+11,'text-anchor':'middle','font-size':11,'font-weight':500,'font-family':'var(--f-mono)',fill:'var(--bg)'},'',tg);
+  function tip(x,label){tt.textContent=label;const wd=label.length*6.6+12,cxx=Math.min(R-wd/2,Math.max(L+wd/2,x));tl.setAttribute('x1',x);tl.setAttribute('x2',x);tr.setAttribute('x',cxx-wd/2);tr.setAttribute('width',wd);tt.setAttribute('x',cxx);tg.setAttribute('visibility','visible')}
+  svg.addEventListener('mouseleave',()=>tg.setAttribute('visibility','hidden'));
+  return gs;
+}
+
+/* review memos */
+function grow(ta){if(!ta.offsetParent)return;ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px'}
+addEventListener('resize',()=>Object.values(MEMO).forEach(m=>m.ta.isConnected&&grow(m.ta)));
+function memoId(date,k){return date+'_p'+String(k+1).padStart(2,'0')}
+function saveMemo(id){const m=MEMO[id];if(!m)return;m.chain=m.chain.then(async()=>{const v=m.ta.value;if(!DB||v===m.saved){if(v===m.saved)m.st.textContent=v?'已儲存':'';return}m.st.textContent='儲存中…';try{await DB.doc('reviews/'+id).set({date:m.date,pos:m.k+1,text:v,updatedAt:new Date().toISOString()});m.saved=v;if(m.ta.value===v)m.st.textContent='已儲存'}catch(e){m.st.textContent='儲存失敗，稍後再試'}})}
+function applyReviews(){Object.entries(MEMO).forEach(([id,m])=>{const r=REV[id];const txt=r?String(r.text||''):'';m.saved=txt;if(document.activeElement!==m.ta){if(m.ta.value!==txt){m.ta.value=txt;grow(m.ta)}m.st.textContent=txt?'已儲存':''}})}
+
+function paint(){groups.forEach((g,i)=>{const on=showAll||active===i;g.setAttribute('opacity',on?1:0);g.style.pointerEvents=on?'':'none'});document.querySelectorAll('#dayBody .row').forEach(r=>r.classList.toggle('on',Number(r.dataset.k)===active))}
+function focusPos(k){active=active===k?null:k;paint()}
+
+/* daily view */
+function renderDay(){
+  const body=$('dayBody'),day=DAYS[CUR];body.replaceChildren();MEMO={};active=null;
+  if(!day){body.append(h('div','panel empty','還沒有交易日。收盤後把成交紀錄貼給 Claude，就會加到這裡。'));return}
+  const wrap=h('div');wrap.style.cssText='display:grid;gap:16px';
+  const st=day.stats||{};
+  const stats=h('section','stats');stats.setAttribute('aria-label','當日摘要');
+  const card=(k,v,small,cls,alert)=>{const c=h('div','stat'+(alert?' alert':''));c.append(h('div','k',k));const vv=h('div','v'+(cls?' '+cls:''),v);if(small)vv.append(h('small',null,small));c.append(vv);stats.append(c)};
+  {const pb=PREALL[day.date];if(pb&&pb.bias){const against=(day.pos||[]).filter(p=>pb.bias==='多頭'?p[0]==='Short':pb.bias==='空頭'?p[0]==='Long':false).length;card('盤前背景判斷',pb.bias,pb.bias==='區間'?(pb.biasNote||'').slice(0,24):`逆著判斷的部位 ${against} / ${(day.pos||[]).length}`,against?'neg':'',true)}else card('盤前背景判斷','未填','開盤後在盤前提醒填寫')}
+  card('當日淨損益（含手續費）',money(st.net||0),null,(st.net||0)<0?'neg':'pos');
+  if(st.ruleTime)card('規則觸發',st.ruleTime,st.ruleText||'',null,true);else card('規則觸發','無','全天守住規則','pos');
+  card('規則觸發後仍交易',String(st.afterStop||0),st.afterStop?('個部位，'+money(st.afterStopNet||0)):'個部位',st.afterStop?'neg':'');
+  card('最大同時持倉',String(st.maxLots||0),'口',(st.maxLots||0)>1?'neg':'');
+  wrap.append(stats);
+  const split=h('div','split');
+  const led=h('section','panel ledger');led.setAttribute('aria-label','部位檢討');
+  const sc=h('div','ledger-scroll'),head=h('div','ledger-head');head.append(h('h2',null,`1～${(day.pos||[]).length} 部位檢討`));
+  const tog=h('label','tog');tog.htmlFor='showAll';const cb=document.createElement('input');cb.type='checkbox';cb.id='showAll';cb.checked=showAll;tog.append(cb,document.createTextNode('顯示全部'));head.append(tog);
+  const list=h('div');sc.append(head,list);led.append(sc);
+  const cp=h('section','panel');const ch=h('div','chart');const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 1000 580');svg.setAttribute('role','img');svg.setAttribute('aria-label',`${day.label||CUR} MES 5 分鐘 K 線與進出場`);ch.append(svg);
+  const lg=h('div','legend');lg.innerHTML='<span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--bull)"></i>買進</span><span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--bear)"></i>放空</span><span><i style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ink-2);background:var(--panel)"></i>出場</span><span><i style="width:14px;height:2px;background:var(--ema);vertical-align:3px"></i>20 EMA</span><span><i style="width:14px;border-top:1px dashed var(--level);vertical-align:3px"></i>前日與夜盤價位</span>';
+  const hov=h('span','hover','滑過 K 棒看開高低收');
+  if((day.prevBars||[]).length){const tg=h('label','tog');tg.htmlFor='showPrev';const pc=document.createElement('input');pc.type='checkbox';pc.id='showPrev';pc.checked=showPrev;tg.append(pc,document.createTextNode('顯示前一日'));pc.addEventListener('change',()=>{showPrev=pc.checked;try{localStorage.setItem('journal-prev',showPrev?'1':'0')}catch(e){}renderDay()});lg.append(tg)}
+  lg.prepend(hov);lg.classList.add('top');cp.append(lg,ch);
+  split.append(cp,led);wrap.append(split);
+  if((day.bars||[]).length)groups=drawChart(svg,day,hov);else{groups=[];cp.replaceChildren(barsPlaceholder(day))}
+  groups.forEach((g,k)=>{g.style.cursor='pointer';g.addEventListener('click',()=>{focusPos(k);const r=list.querySelector(`.row[data-k="${k}"]`);if(r&&active===k)r.scrollIntoView({block:'nearest'})})});
+  cb.addEventListener('change',()=>{showAll=cb.checked;paint()});
+  (day.pos||[]).forEach((p,k)=>{
+    if(k===day.stopPos){list.append(h('div','divider',day.stopNote||'規則觸發，以下為規則之外的交易。'))}
+    const nt=(day.notes||[])[k]||{c:[],t:''};
+    const r=h('div','row');r.dataset.k=k;r.tabIndex=0;r.setAttribute('role','button');
+    const meta=h('span','meta');meta.append(h('span',p[0]==='Long'?'side-l':'side-s',(p[0]==='Long'?'做多 ':'放空 ')+p[1]+' 口'),h('span','m',`${fmt(p[2])}→${fmt(p[3])}`));
+    const tx=h('span','txt'),chips=h('div','chips');(nt.c||[]).forEach(([c,t])=>chips.append(h('span','chip '+c,t)));
+    tx.append(chips,h('div',null,`${barLab(p[8])}～${barLab(p[9])}　${nt.t||''}　累計 ${money(p[5])}`));
+    r.append(h('span','n',String(k+1)),h('span','m time',`${p[6]}→${p[7]}`),h('span','pl '+(p[4]>=0?'pos':'neg'),money(p[4])),meta,tx);
+    r.addEventListener('click',()=>focusPos(k));r.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();focusPos(k)}});
+    const memo=h('div','memo'),ta=document.createElement('textarea'),sst=h('span','memo-st');ta.rows=1;ta.placeholder='我的檢討';ta.setAttribute('aria-label',`第 ${k+1} 個部位的檢討`);ta.disabled=!DB;memo.append(ta,sst);
+    list.append(r,memo);
+    const id=memoId(CUR,k),m={ta,st:sst,saved:'',t:null,chain:Promise.resolve(),date:CUR,k};MEMO[id]=m;
+    ta.addEventListener('input',()=>{grow(ta);clearTimeout(m.t);sst.textContent='未儲存';m.t=setTimeout(()=>saveMemo(id),900)});
+    ta.addEventListener('blur',()=>{clearTimeout(m.t);saveMemo(id)});
+  });
+  if((day.bars||[]).length&&!day.reviewedAt&&SAMPLE&&DB){
+    const b=h('section','panel box');b.append(h('h2',null,'Claude 逐筆檢討'));
+    const p=h('p','sub','K 線已經補上。可以請 Claude 依 K 線逐筆檢討每個部位，並列出照規則該叫停的時間點（會用你的 Anthropic API key）。');
+    const row=h('div','acts');row.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap';const btn=h('button','linkbtn','請 Claude 逐筆檢討');btn.type='button';const st=h('span','sub');st.id='revSt';st.textContent=BARST[day.date]||'';
+    btn.addEventListener('click',()=>runReview(day.date,btn));row.append(btn,st);b.append(p,row);wrap.append(b);
+  }
+  if((day.intervene||[]).length||(day.compare||[]).length){
+    const cols=h('div','cols');
+    if((day.intervene||[]).length){const b=h('section','panel box');b.append(h('h2',null,'照規則的話，會在這些時間點叫停'));const ol=h('ol');day.intervene.forEach(([bb,t])=>{const li=h('li');li.append(h('b',null,bb),document.createTextNode('：'+t));ol.append(li)});b.append(ol);cols.append(b)}
+    if((day.compare||[]).length){const b=h('section','panel box');b.append(h('h2',null,'規則與實際的比較'));const tb=h('table','cmp');day.compare.forEach(([a,v,c])=>{const tr=h('tr');tr.append(h('td',null,a),h('td',c||'',v));tb.append(tr)});b.append(tb);if(day.compareNote)b.append(h('p',null,day.compareNote));cols.append(b)}
+    wrap.append(cols);
+  }
+  body.append(wrap);paint();applyReviews();
+  requestAnimationFrame(()=>Object.values(MEMO).forEach(m=>grow(m.ta)));
+}
+
+/* overview */
+function renderOver(){
+  const body=$('overBody');body.replaceChildren();
+  const ds=Object.values(DAYS).sort((a,b)=>a.date<b.date?1:-1);
+  if(!ds.length){body.append(h('div','panel empty','還沒有交易日。'));return}
+  const wrap=h('div');wrap.style.cssText='display:grid;gap:16px';
+  const tot=ds.reduce((a,d)=>a+((d.stats||{}).net||0),0),broke=ds.filter(d=>(d.stats||{}).ruleTime).length,after=ds.reduce((a,d)=>a+((d.stats||{}).afterStop||0),0);
+  const stats=h('section','stats');
+  const card=(k,v,small,cls)=>{const c=h('div','stat');c.append(h('div','k',k));const vv=h('div','v'+(cls?' '+cls:''),v);if(small)vv.append(h('small',null,small));c.append(vv);stats.append(c)};
+  card('累計淨損益',money(tot),`${ds.length} 個交易日`,tot<0?'neg':'pos');
+  card('觸發規則的天數',String(broke),`/ ${ds.length} 天`,broke?'neg':'pos');
+  card('觸發後仍交易',String(after),'個部位',after?'neg':'pos');
+  const reviewed=ds.reduce((a,d)=>a+(d.pos||[]).filter((p,k)=>String((REV[memoId(d.date,k)]||{}).text||'').trim()).length,0),allp=ds.reduce((a,d)=>a+(d.pos||[]).length,0);
+  card('已寫檢討',String(reviewed),`/ ${allp} 個部位`);
+  wrap.append(stats);
+  const cp=h('section','panel');const ch=h('div','chart');const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 1000 220');svg.setAttribute('role','img');svg.setAttribute('aria-label','每日淨損益長條圖');ch.append(svg);cp.append(ch);
+  const el=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.appendChild(e);return e};
+  const asc=[...ds].reverse(),vals=asc.map(d=>(d.stats||{}).net||0),mn=Math.min(-550,...vals),mx=Math.max(100,...vals),L=60,R=980,T=16,B=190,Y=v=>T+(mx-v)/(mx-mn)*(B-T),bw=Math.min(40,(R-L)/Math.max(asc.length,1)*0.6);
+  [[0,'0'],[-500,'-500']].forEach(([v,t])=>{el('line',{x1:L,x2:R,y1:Y(v),y2:Y(v),stroke:v?'var(--bear)':'var(--line)','stroke-dasharray':v?'4 3':''});el('text',{x:L-6,y:Y(v)+4,'text-anchor':'end','font-size':11,'font-family':'var(--f-mono)',fill:v?'var(--bear)':'var(--ink-3)'},t)});
+  asc.forEach((d,i)=>{const v=vals[i],cx=L+(R-L)*(i+.5)/asc.length,y0=Y(0),y1=Y(v);el('rect',{x:cx-bw/2,y:Math.min(y0,y1),width:bw,height:Math.max(1,Math.abs(y1-y0)),fill:v<0?'var(--bear)':'var(--bull)',rx:3});el('text',{x:cx,y:B+18,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},d.date.slice(5).replace('-','/'));el('text',{x:cx,y:v<0?y1+14:y1-5,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},Math.round(v))});
+  wrap.append(cp);
+  const tp=h('section','panel tbl-wrap'),tb=h('table','days');
+  tb.innerHTML='<thead><tr><th>交易日</th><th class="num">淨損益</th><th class="num">部位</th><th class="num">最大口數</th><th>規則觸發</th><th class="num">觸發後部位</th><th class="num">觸發後損益</th><th class="num">已寫檢討</th></tr></thead>';
+  const tbody=h('tbody');
+  ds.forEach(d=>{const s=d.stats||{},n=(d.pos||[]).length,rv=(d.pos||[]).filter((p,k)=>String((REV[memoId(d.date,k)]||{}).text||'').trim()).length;
+    const tr=h('tr','link');tr.tabIndex=0;
+    const td=(t,c)=>{const x=h('td',c||'',t);tr.append(x);return x};
+    td(d.label||d.date);td(money(s.net||0),'num '+((s.net||0)<0?'neg':'pos'));td(String(n),'num');td(String(s.maxLots||0),'num'+((s.maxLots||0)>1?' neg':''));td(s.ruleTime?`${s.ruleTime}　${s.ruleText||''}`:'未觸發',s.ruleTime?'neg':'pos');td(String(s.afterStop||0),'num');td(s.afterStop?money(s.afterStopNet||0):'—','num');td(`${rv} / ${n}`,'num');
+    const go=()=>{CUR=d.date;$('daySel').value=CUR;renderDay();showTab('tab-day');scrollTo(0,0)};tr.addEventListener('click',go);tr.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();go()}});tbody.append(tr)});
+  tb.append(tbody);tp.append(tb);wrap.append(tp);
+  body.append(wrap);
+}
+
+/* handbook */
+function renderBook(){
+  const body=$('bookBody');body.replaceChildren();const wrap=h('div');wrap.style.cssText='display:grid;gap:16px';
+  const rp=h('section','panel box');rp.append(h('h2',null,'我的風控規則'));
+  const rules=h('div','rules');const items=(RULES&&RULES.items)||[];
+  if(!items.length)rules.append(h('p','sub','還沒有規則。'));
+  items.forEach((it,i)=>{const r=h('div','rule');r.append(h('span','num',String(i+1)),h('h3',null,it.t),h('span','d',it.d||''));rules.append(r)});
+  rp.append(rules);if(RULES&&RULES.note)rp.append(h('p',null,RULES.note));wrap.append(rp);
+  const lz=allLessons();if(lz.length){const pp=h('section','panel box');pp.append(h('h2',null,'注意事項（從圖解筆記整理）'));const ol=h('ol','principles');lz.forEach(([l,d])=>{const li=h('li',null,l);li.append(h('span','d',d.slice(5).replace('-','/')));ol.append(li)});pp.append(ol);wrap.append(pp)}
+  const head=h('div');head.style.cssText='display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap';head.append(h('h2',null,`好交易案例（${CASES.length}）`),h('span','sub','每天挑出至少 1 倍 MM 的好機會，跟 Claude 討論後加進來。'));wrap.append(head);
+  const grid=h('div','cases');
+  if(!CASES.length)grid.append(h('div','panel empty','還沒有案例。'));
+  [...CASES].sort((a,b)=>a.date<b.date?1:-1).forEach(c=>{const card=h('article','panel case');card.append(h('span','when',`${c.date}${c.bars?'　'+c.bars:''}`),h('h3',null,c.title||''));
+    if((c.tags||[]).length){const ch=h('div','chips');c.tags.forEach(t=>ch.append(h('span','chip ok',t)));card.append(ch)}
+    const dl=h('dl');[['背景',c.context],['進場',c.entry],['停損',c.stop],['目標',c.target]].forEach(([k,v])=>{if(v){dl.append(h('dt',null,k),h('dd',null,v))}});card.append(dl);
+    if(c.note)card.append(h('p',null,c.note));if(c.source)card.append(h('span','src','來源：'+c.source));
+    if(DAYS[c.date]){const k=Number(c.pos)-1,hasPos=k>=0&&k<(DAYS[c.date].pos||[]).length;const b=h('button','linkbtn',hasPos?`查看這筆交易（第 ${k+1} 個部位）`:'查看當天檢討');b.type='button';b.addEventListener('click',()=>{CUR=c.date;$('daySel').value=CUR;renderDay();showTab('tab-day');if(hasPos){active=k;paint();requestAnimationFrame(()=>{const r=document.querySelector(`#dayBody .row[data-k="${k}"]`);if(r){r.closest('.split').scrollIntoView({block:'start'});r.scrollIntoView({block:'center'});r.focus({preventScroll:true})}})}else scrollTo(0,0)});card.append(b)}
+    grid.append(card)});
+  wrap.append(grid);body.append(wrap);
+}
+
+
+/* chart notes (screenshots + lessons) */
+let ASSETS=null,CHARTS=[];const capChain={};
+function figSt(t){const s=$('figSt');if(s)s.textContent=t}
+function latestDay(){const ds=Object.keys(DAYS).sort();return ds.length?ds[ds.length-1]:TODAY}
+async function addShot(file){
+  if(!ASSETS||!DB||!file)return;
+  const date=($('noteDate')&&$('noteDate').value)||latestDay();
+  if(!/^image\//.test(file.type)){figSt('只能加入圖片檔');return}
+  figSt('上傳中…');
+  try{const r=await ASSETS.upload(file);const id='c'+Date.now();noteIdx=0;noteFilter=noteFilter&&noteFilter!==date?'':noteFilter;await DB.doc('charts/'+id).set({date,asset:r.id,caption:'',lessons:[],createdAt:new Date().toISOString()});figSt('已加入 '+date.slice(5).replace('-','/'));analyzeShot(id,file,false)}
+  catch(e){figSt(({too_large:'檔案超過 20 MB',unsupported_type:'只支援 PNG、JPG、GIF、WebP',quota_or_state:'儲存空間已滿',rate_limited:'太頻繁了，稍後再試',not_granted:'這個檢視不能上傳'})[e&&e.code]||'上傳失敗，稍後再試')}
+}
+let noteFilter='',noteIdx=0;
+function stepNote(d){noteIdx+=d;fillCharts()}
+document.addEventListener('keydown',e=>{if($('view-notes').hidden)return;const tg=e.target;if(tg&&(tg.tagName==='TEXTAREA'||tg.tagName==='INPUT'||tg.isContentEditable||tg.tagName==='SELECT'))return;if(e.key==='ArrowLeft'&&noteIdx>0){e.preventDefault();stepNote(-1)}else if(e.key==='ArrowRight'){e.preventDefault();stepNote(1)}});
+function renderNotesBar(){
+  const body=$('notesBody');if($('figList'))return;
+  body.replaceChildren();
+  const bar=h('section','panel box');const row=h('div','fig-head');
+  const left=h('div','acts');const fl=h('label','sub','顯示');fl.htmlFor='noteFilter';const sel=document.createElement('select');sel.id='noteFilter';sel.addEventListener('change',()=>{noteFilter=sel.value;noteIdx=0;fillCharts()});left.append(fl,sel);
+  const right=h('div','acts');const st=h('span','prog');st.id='figSt';right.append(st);
+  if(ASSETS){const dl=h('label','sub','歸到交易日');dl.htmlFor='noteDate';const di=document.createElement('input');di.type='date';di.id='noteDate';di.value=latestDay();di.style.cssText='font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px';
+    const inp=document.createElement('input');inp.type='file';inp.accept='image/png,image/jpeg,image/gif,image/webp';inp.id='figFile';inp.hidden=true;inp.addEventListener('change',()=>{const f=inp.files&&inp.files[0];inp.value='';addShot(f)});
+    const b=h('label','linkbtn','加入截圖');b.htmlFor='figFile';b.tabIndex=0;b.setAttribute('role','button');b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}});right.append(dl,di,inp,b)}
+  row.append(left,right);bar.append(row);
+  if(ASSETS){
+    const pz=h('div','paste');pz.contentEditable='true';pz.setAttribute('role','textbox');pz.setAttribute('aria-label','貼上截圖');pz.dataset.ph='點這裡，再按 Ctrl+V（Mac 用 ⌘+V）或右鍵「貼上」加入截圖；也可以把圖片拖進來';
+    const clear=()=>{if(pz.innerHTML)pz.innerHTML=''};
+    pz.addEventListener('paste',e=>{e.preventDefault();const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(it)addShot(it.getAsFile());else figSt('剪貼簿裡沒有圖片，先截圖或複製圖片再貼上')});
+    pz.addEventListener('beforeinput',e=>{if(e.inputType!=='insertFromPaste')e.preventDefault()});
+    pz.addEventListener('input',clear);
+    pz.addEventListener('keydown',e=>{if(e.key==='Tab'||e.ctrlKey||e.metaKey)return;e.preventDefault()});
+    pz.addEventListener('dragover',e=>{e.preventDefault();pz.classList.add('over')});
+    pz.addEventListener('dragleave',()=>pz.classList.remove('over'));
+    pz.addEventListener('drop',e=>{e.preventDefault();pz.classList.remove('over');const f=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('image/'));if(f)addShot(f);else figSt('只能拖入圖片檔')});
+    bar.append(pz,h('p','sub','加入後 Claude 會依你的標註整理注意事項，並同步到交易手冊和盤前提醒。'));
+  }
+  const list=h('div','figs');list.id='figList';
+  body.append(bar,list);
+}
+function fillFilter(){const sel=$('noteFilter');if(!sel)return;const ds=[...new Set(CHARTS.map(c=>c.date))].sort().reverse();const cur=noteFilter;sel.replaceChildren(new Option(`全部（${CHARTS.length} 張）`,''));ds.forEach(d=>sel.append(new Option(`${d.replace(/-/g,'/')}（${CHARTS.filter(c=>c.date===d).length}）`,d)));if(cur&&!ds.includes(cur))noteFilter='';sel.value=noteFilter}
+function fillCharts(){
+  renderNotesBar();fillFilter();
+  const box=$('figList');if(!box)return;
+  if(box.contains(document.activeElement)&&document.activeElement.tagName==='TEXTAREA'){box.dataset.dirty='1';return}
+  box.dataset.dirty='';box.replaceChildren();
+  const list=CHARTS.filter(c=>!noteFilter||c.date===noteFilter).sort((a,b)=>a.date===b.date?((a.createdAt||'')<(b.createdAt||'')?1:-1):(a.date<b.date?1:-1));
+  if(!list.length){box.append(h('div','panel empty',ASSETS?'還沒有截圖。選好交易日後按「加入截圖」，或直接貼上圖片。':'還沒有截圖。'));return}
+  const total=list.length;noteIdx=Math.max(0,Math.min(noteIdx,total-1));
+  [list[noteIdx]].forEach(c=>{
+    const f=h('article','panel box fig');const src=MJ.assetUrl(c.asset);
+    const hd=h('div','fig-head');hd.append(h('h3',null,(DAYS[c.date]&&DAYS[c.date].label)||c.date.replace(/-/g,'/')));
+    if(DAYS[c.date]){const go=h('button','linkbtn','看當天檢討');go.type='button';go.addEventListener('click',()=>{CUR=c.date;$('daySel').value=CUR;renderDay();showTab('tab-day');scrollTo(0,0)});hd.append(go)}
+    f.append(hd);
+    f.append(zoomer(c.id,src,(c.caption||'交易圖解').replace(/==/g,'').slice(0,60)));
+    const lrow=h('div','lhead');lrow.append(h('h2',null,'整理出的注意事項'));f.append(lrow);
+    if((c.lessons||[]).length){const ul=h('ol','lessons');c.lessons.forEach(l=>ul.append(h('li',null,l)));f.append(ul)}else f.append(h('p','sub','還沒有注意事項。'));
+    const ta=document.createElement('textarea');ta.className='cap';ta.rows=1;ta.placeholder='我的筆記';ta.setAttribute('aria-label','這張圖的筆記');ta.value=c.caption||'';ta.disabled=!DB;
+    const st=h('span','prog',FSTAT[c.id]||'');st.dataset.fig=c.id;let tm=null;
+    const save=()=>{const v=ta.value;capChain[c.id]=(capChain[c.id]||Promise.resolve()).then(()=>DB.doc('charts/'+c.id).update({caption:v})).then(()=>{st.textContent='已儲存'}).catch(()=>{st.textContent='儲存失敗，稍後再試'})};
+    ta.addEventListener('input',()=>{grow(ta);st.textContent='未儲存';clearTimeout(tm);tm=setTimeout(save,900)});
+    ta.addEventListener('blur',()=>{clearTimeout(tm);if(ta.value!==(c.caption||''))save();if(box.dataset.dirty)setTimeout(fillCharts,0)});
+    const view=h('div','capview');view.tabIndex=0;view.setAttribute('role','button');view.setAttribute('aria-label','編輯這張圖的筆記');
+    const tools=h('div','captools');const redB=h('button','linkbtn','標成紅字');redB.type='button';
+    redB.addEventListener('mousedown',e=>e.preventDefault());
+    redB.addEventListener('click',()=>{const s=ta.selectionStart,e2=ta.selectionEnd;if(s===e2){st.textContent='先選取要變紅的文字';return}const v=ta.value;ta.value=v.slice(0,s)+'=='+v.slice(s,e2)+'=='+v.slice(e2);ta.focus();ta.setSelectionRange(s+2,e2+2);ta.dispatchEvent(new Event('input'))});
+    tools.append(redB,h('span','sub','選取文字後按「標成紅字」；刪掉文字前後的 == 就取消紅字'));
+    const renderView=()=>{view.replaceChildren();const v=ta.value;if(!v.trim()){view.append(h('span','ph','我的筆記（點一下開始寫）'));return}renderRed(v,view)};
+    const edit=()=>{if(!DB)return;view.hidden=true;ta.hidden=false;tools.hidden=false;ta.focus();grow(ta)};
+    view.addEventListener('click',edit);view.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();edit()}});
+    ta.addEventListener('blur',()=>{renderView();view.hidden=false;ta.hidden=true;tools.hidden=true});
+    ta.hidden=true;tools.hidden=true;renderView();
+    f.append(view,ta,tools);
+    const acts=h('div','acts');
+    if(total>1){const nav=h('span','fnav');const pv=h('button','linkbtn','←');pv.type='button';pv.setAttribute('aria-label','較新的一張');pv.disabled=noteIdx===0;pv.addEventListener('click',()=>stepNote(-1));
+      const nx=h('button','linkbtn','→');nx.type='button';nx.setAttribute('aria-label','較舊的一張');nx.disabled=noteIdx>=total-1;nx.addEventListener('click',()=>stepNote(1));
+      nav.append(pv,h('span','prog',`${noteIdx+1} / ${total}`),nx);acts.append(nav)}
+    if(SAMPLE){const rb=h('button','linkbtn','重新整理');rb.type='button';rb.title='重新讀圖，更新整理出的注意事項';let armedR=false,tmoR=null;rb.addEventListener('click',async()=>{if(!armedR){armedR=true;rb.textContent='再按一次確認重新整理';tmoR=setTimeout(()=>{armedR=false;rb.textContent='重新整理'},4000);return}clearTimeout(tmoR);armedR=false;rb.textContent='重新整理';rb.disabled=true;try{const bl=await fetch(MJ.assetUrl(c.asset)).then(r=>{if(!r.ok)throw 0;return r.blob()});await analyzeShot(c.id,bl,false)}catch(e){setFig(c.id,'讀不到這張圖，稍後再試')}finally{rb.disabled=false}});acts.append(rb)}
+    acts.append(st);
+    if(ASSETS){const del=h('button','linkbtn danger','刪除這張圖');del.type='button';let armed=false,tmo=null;
+      del.addEventListener('click',async()=>{if(!armed){armed=true;del.textContent='再按一次確認刪除';tmo=setTimeout(()=>{armed=false;del.textContent='刪除這張圖'},4000);return}
+        clearTimeout(tmo);del.disabled=true;try{await DB.doc('charts/'+c.id).delete();try{await ASSETS.delete(c.asset)}catch(e){}}catch(e){del.disabled=false;del.textContent='刪除失敗，再試一次';armed=false}});
+      acts.append(del)}
+    lrow.append(acts);box.append(f);
+  });
+  requestAnimationFrame(()=>box.querySelectorAll('textarea').forEach(grow));
+}
+document.addEventListener('paste',e=>{if($('view-notes').hidden||!ASSETS)return;const t=e.target;if(t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'||(t.closest&&t.closest('.paste'))))return;const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(!it)return;e.preventDefault();addShot(it.getAsFile())});
+let SAMPLE=null;const FSTAT={};
+function setFig(id,t){FSTAT[id]=t;document.querySelectorAll('[data-fig="'+id+'"]').forEach(e=>e.textContent=t);figSt(t)}
+const SHOT_PROMPT=`這是一張 MES（微型 S&P 500 期貨）5 分鐘 K 線的交易平台截圖，交易者在圖上用文字和線條做了檢討標註。
+請根據交易者寫在圖上的文字標註，以及圖上看得到的線條（例如等距測量 MM 的 0/1/2 線、趨勢線、區間、通道），用 Al Brooks 價格行為學的觀點，整理出 1～3 條簡短、下次交易時要注意的事項，每條 40 字以內，正體中文。
+只根據交易者的標註內容整理，不要加入圖上沒有的觀點，也不要給買賣建議。平台介面本身的文字（價格軸、時間軸、按鈕、帳戶數字）不算標註。
+如果圖上沒有交易者寫的文字，lessons 回空陣列。
+只回覆 JSON：{"lessons":["注意事項一","注意事項二"]}`;
+async function analyzeShot(id,blob,overwrite){
+  if(!SAMPLE||!DB||!blob){return}
+  try{const lim=await SAMPLE.limits().catch(()=>null);if(!lim||!lim.images){setFig(id,'這個檢視不能把圖片交給 Claude 整理');return}}catch(e){}
+  setFig(id,'Claude 正在讀圖、整理注意事項…（約 10～60 秒）');
+  try{
+    const out=await SAMPLE.json(SHOT_PROMPT,{images:blob,cache:false});
+    const lessons=(Array.isArray(out&&out.lessons)?out.lessons:[]).map(s=>String(s).trim()).filter(Boolean).slice(0,5).map(s=>s.slice(0,120));
+    const cur=CHARTS.find(c=>c.id===id)||{};const patch={lessons,aiAt:new Date().toISOString()};
+    await DB.doc('charts/'+id).update(patch);
+    setFig(id,lessons.length?'已整理注意事項，請確認內容':'圖上沒有找到你寫的標註');
+  }catch(e){
+    const c=e&&e.code;
+    if(c==='not_granted'||c==='sampling_disabled'){SAMPLE=null;setFig(id,'沒有允許頁面使用 Claude，先手動寫筆記就好')}
+    else setFig(id,({rate_limited:'用量暫時到上限，稍後按「重新整理」',invalid_json:'整理結果格式有誤，按「重新整理」再試',images_unavailable:'這個檢視不能把圖片交給 Claude 整理',image_rejected:'圖片太大或格式不支援',refused:'Claude 沒有整理這張圖',bad_key:'Anthropic API key 無效，到「設定」檢查',no_credit:'Anthropic 帳戶餘額不足',bad_model:'模型名稱不對，到「設定」檢查',network:'連不到 Anthropic，稍後再試'})[c]||'自動整理失敗，稍後按「重新整理」')
+  }
+}
+const ZST={};
+function zoomer(id,src,alt){
+  const wrap=h('div','zoom'),stage=h('div','zstage'),img=document.createElement('img');img.src=src;img.alt=alt;img.draggable=false;img.loading='lazy';stage.append(img);
+  img.addEventListener('error',()=>{wrap.replaceWith(h('div','panel empty','圖片暫時無法顯示'))});
+  const st=ZST[id]||(ZST[id]={s:1,x:0,y:0});
+  const bar=h('div','zbar'),lab=h('span','zl');
+  const mk=(t,aria,fn)=>{const b=h('button',null,t);b.type='button';b.setAttribute('aria-label',aria);b.addEventListener('click',fn);return b};
+  const clamp=()=>{const w=stage.clientWidth,hh=stage.clientHeight;st.x=Math.min(0,Math.max(w-w*st.s,st.x));st.y=Math.min(0,Math.max(hh-hh*st.s,st.y))};
+  const apply=()=>{clamp();img.style.transform=`translate(${st.x}px,${st.y}px) scale(${st.s})`;wrap.classList.toggle('zoomed',st.s>1.001);lab.textContent=Math.round(st.s*100)+'%'};
+  const zoomAt=(ns,cx,cy)=>{ns=Math.min(6,Math.max(1,ns));const r=stage.getBoundingClientRect();const px=(cx??r.left+r.width/2)-r.left,py=(cy??r.top+r.height/2)-r.top;st.x=px-(px-st.x)*ns/st.s;st.y=py-(py-st.y)*ns/st.s;st.s=ns;apply()};
+  bar.append(mk('−','縮小',()=>zoomAt(st.s/1.5)),lab,mk('+','放大',()=>zoomAt(st.s*1.5)),mk('重設','回到原尺寸',()=>{st.s=1;st.x=0;st.y=0;apply()}),h('span',null,'Ctrl＋滾輪或雙擊放大，放大後可拖曳'));
+  stage.addEventListener('wheel',e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();zoomAt(st.s*Math.exp(-e.deltaY*0.002),e.clientX,e.clientY)},{passive:false});
+  stage.addEventListener('dblclick',e=>{e.preventDefault();zoomAt(st.s>1.001?1:2,e.clientX,e.clientY)});
+  const pts=new Map();let last=null,pinch=null;
+  stage.addEventListener('pointerdown',e=>{pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:st.s};}else if(st.s>1.001){last={x:e.clientX,y:e.clientY};wrap.classList.add('dragging')}stage.setPointerCapture(e.pointerId)});
+  stage.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2&&pinch){const [a,b]=[...pts.values()];zoomAt(pinch.s*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d,(a.x+b.x)/2,(a.y+b.y)/2);return}
+    if(last){st.x+=e.clientX-last.x;st.y+=e.clientY-last.y;last={x:e.clientX,y:e.clientY};apply()}});
+  const end=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size){last=null;wrap.classList.remove('dragging')}};
+  stage.addEventListener('pointerup',end);stage.addEventListener('pointercancel',end);
+  img.addEventListener('load',apply);addEventListener('resize',()=>{if(stage.isConnected)apply()});
+  wrap.append(stage,bar);requestAnimationFrame(apply);return wrap;
+}
+function renderRed(v,parent){const re=/==([\s\S]+?)==/g;let last=0,m;while((m=re.exec(v))){if(m.index>last)parent.append(document.createTextNode(v.slice(last,m.index)));parent.append(h('span','red',m[1]));last=m.index+m[0].length}if(last<v.length)parent.append(document.createTextNode(v.slice(last)))}
+function allLessons(){const out=[];[...CHARTS].sort((a,b)=>a.date<b.date?1:-1).forEach(c=>(c.lessons||[]).forEach(l=>out.push([l,c.date])));return out}
+
+
+/* import trades → new trading day */
+function barLab(n){return n>=1&&n<=84?'#'+n:(n<1?'夜盤':'盤後')}
+const MON={january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11};
+function tpeMs(y,mo,d,hh,mi,ss){return Date.UTC(y,mo,d,hh-8,mi,ss)}
+function parseTime(s){s=String(s||'').trim();const dg=s.replace(/[,\s]/g,'');if(/^\d{9,13}$/.test(dg))return dg.length>=12?+dg:(+dg)*1000;let m=s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);if(m)return tpeMs(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0));
+  m=s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})\s*@?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)$/i);if(m&&MON[m[1].toLowerCase()]!=null){let hh=+m[4]%12;if(/pm/i.test(m[7]))hh+=12;return tpeMs(+m[3],MON[m[1].toLowerCase()],+m[2],hh,+m[5],+(m[6]||0))}return null}
+const num=s=>{const v=parseFloat(String(s).replace(/[$,\s]/g,''));return isFinite(v)?v:null};
+function parseTrades(text){
+  const toks=[];String(text).split(/\r?\n/).forEach(l=>l.split('\t').forEach(x=>{x=x.trim();if(x)toks.push(x)}));
+  const trades=[],errs=[];let i=0;
+  while(i<toks.length){if(!/^\d{8,}$/.test(toks[i])){i++;continue}
+    const f=toks.slice(i,i+12);i+=1;
+    if(f.length<12){errs.push(`編號 ${f[0]} 的欄位不完整`);continue}
+    const [id,sym,q,et,xt,,ep,xp,pnl,f1,f2,side]=f;const E=parseTime(et),X=parseTime(xt);
+    const rec={id,sym,q:parseInt(q,10),E,X,ep:num(ep),xp:num(xp),pnl:num(pnl),fee:(num(f1)||0)+(num(f2)||0),side:/^l/i.test(side)?'Long':/^s/i.test(side)?'Short':null};
+    if(!rec.q||rec.E==null||rec.X==null||rec.ep==null||rec.xp==null||rec.pnl==null||!rec.side){errs.push(`編號 ${id} 有欄位讀不懂`);continue}
+    trades.push(rec);i+=11}
+  const seen=new Set();return {trades:trades.filter(r=>!seen.has(r.id)&&seen.add(r.id)),errs}}
+const ETF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+function etParts(ms){const o={};ETF.formatToParts(new Date(ms)).forEach(p=>o[p.type]=p.value);return {y:+o.year,m:+o.month,d:+o.day,h:+o.hour%24}}
+const hhmm=ms=>{const d=new Date(ms+8*3600e3);return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')};
+function buildDay(trades){
+  const first=Math.min(...trades.map(r=>r.E));let p=etParts(first);let sd=new Date(Date.UTC(p.y,p.m-1,p.d));if(p.h>=18)sd=new Date(sd.getTime()+864e5);
+  while([0,6].includes(sd.getUTCDay()))sd=new Date(sd.getTime()+864e5);
+  const date=sd.toISOString().slice(0,10),Y=sd.getUTCFullYear(),M=sd.getUTCMonth(),D=sd.getUTCDate();
+  const edt=etParts(Date.UTC(Y,M,D,12)).h===8,openMs=Date.UTC(Y,M,D,edt?13:14,30),openMin=edt?21*60+30:22*60+30;
+  const mins=ms=>Math.round((ms-openMs)/6e3)/10,bar=ms=>Math.floor((ms-openMs)/3e5)+1;
+  const G=new Map();trades.forEach(r=>{const k=r.X+'|'+r.side;if(!G.has(k))G.set(k,[]);G.get(k).push(r)});
+  const P=[...G.values()].map(g=>{g.sort((a,b)=>a.E-b.E);const q=g.reduce((a,r)=>a+r.q,0);return {g,side:g[0].side,q,avg:g.reduce((a,r)=>a+r.ep*r.q,0)/q,xp:g[0].xp,X:g[0].X,E:g[0].E,net:+g.reduce((a,r)=>a+r.pnl+r.fee,0).toFixed(2)}}).sort((a,b)=>a.E-b.E||a.X-b.X);
+  let cum=0,streak=0,lost=false,stopIdx=-1,ruleTime=null,ruleWhy='',cumStop=0,stopMs=null;const notes=[];
+  P.forEach((x,i)=>{const c=[];if(stopIdx>=0&&i>=stopIdx)c.push(['warn','規則停止後']);if(lost&&x.q>1)c.push(['bad',`虧損後 ${x.q} 口`]);
+    if(i>0){const pv=P[i-1],gap=(x.E-pv.X)/1000;if(pv.net<0&&pv.side!==x.side&&gap>=0&&gap<=60)c.push(['bad',`停損 ${Math.round(gap)} 秒反手`])}
+    cum=+(cum+x.net).toFixed(2);x.cum=cum;if(x.net<0){streak++;lost=true}else streak=0;
+    if(stopIdx<0&&(cum<=-500||streak>=3)){stopIdx=i+1;ruleTime=hhmm(x.X);cumStop=cum;stopMs=x.X;ruleWhy=cum<=-500&&streak>=3?'連虧 3 筆＋超過 -$500':cum<=-500?'超過 -$500':'連虧 3 筆';c.push(['bad',ruleWhy])}
+    else if(x.net<0&&streak>=2)c.push(['bad',`連虧第 ${streak} 筆`]);
+    if(!c.length)c.push(x.net>=0?['ok','賺']:['warn','虧']);notes.push({c,t:''})});
+  const ev=[];trades.forEach(r=>{ev.push([r.E,r.q],[r.X,-r.q])});ev.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);let o=0,mx=0;ev.forEach(([,d])=>{o+=d;mx=Math.max(mx,o)});
+  const net=+trades.reduce((a,r)=>a+r.pnl+r.fee,0).toFixed(2),after=stopIdx>=0?P.length-stopIdx:0,afterNet=stopIdx>=0?+P.slice(stopIdx).reduce((a,x)=>a+x.net,0).toFixed(2):0;
+  const wd=['日','一','二','三','四','五','六'][sd.getUTCDay()];
+  const fills=[];P.forEach((x,k)=>x.g.forEach(r=>fills.push([k,r.side[0],mins(r.E),r.ep,mins(r.X),r.xp,r.q])));
+  const doc={date,label:`${date.replace(/-/g,'/')}（週${wd}）`,openMin,bars:[],levels:[],fills,notes,
+    pos:P.map(x=>[x.side,x.q,+x.avg.toFixed(2),x.xp,x.net,x.cum,hhmm(x.E),hhmm(x.X),bar(x.E),bar(x.X)]),
+    stats:{net,ruleTime,ruleText:ruleTime?`${ruleWhy}，已實現 ${money(cumStop)}`:'',afterStop:after,afterStopNet:afterNet,maxLots:mx,contracts:trades.reduce((a,r)=>a+r.q,0)},
+    stopPos:stopIdx>=0&&stopIdx<P.length?stopIdx:-1,stopMin:stopMs!=null?mins(stopMs):null,stopLabel:ruleTime?`${ruleTime} 規則：今天結束`:'',
+    stopNote:ruleTime?`${ruleTime} ${ruleWhy}，已實現 ${money(cumStop)}，照你的規則今天到這裡結束。以下都是規則之外的交易。`:'',
+    intervene:[],compare:ruleTime?[['實際結果',money(net),net<0?'neg':'pos'],[`照規則停在 ${ruleTime}`,money(cumStop),cumStop<0?'neg':'pos']]:[],
+    needsBars:true,source:'page',importedAt:new Date().toISOString(),trades:trades.map(r=>[r.id,r.q,r.E,r.X,r.ep,r.xp,r.pnl,r.fee,r.side])};
+  return doc}
+
+/* auto K-line fetch (desktop app built-in browser) + Claude review */
+let MCP=null;const BARST={},BUSY={};
+function barSt(date,t){BARST[date]=t;const e=$('barSt');if(e&&CUR===date)e.textContent=t}
+function barsPlaceholder(day){
+  const w=h('div','empty');w.style.cssText='display:grid;gap:8px;justify-items:center';
+  w.append(h('p',null,`${day.label||CUR} 的 K 線還沒補上。部位檢討和統計已經可以用。`),h('p','sub',`收盤後 GitHub Actions 會自動抓 Yahoo 的 5 分 K 補上，通常幾分鐘內，頁面會自己更新。很久都沒出現的話，到 repo 的 Actions 手動執行「補 K 線」。`));
+  return w}
+function resText(r){if(r==null)return'';if(typeof r==='string')return r;if(typeof r.payload==='string')return r.payload;const c=(r.content||[]).map(b=>b&&b.text||'').join('\n');return c||(r.payload!=null?JSON.stringify(r.payload):'')}
+function pickJson(txt){const i=txt.indexOf('{"chart"');if(i<0)return null;for(let j=txt.lastIndexOf('}');j>i;j=txt.lastIndexOf('}',j-1)){try{return JSON.parse(txt.slice(i,j+1))}catch(e){}}return null}
+function openUtc(dayMs){return dayMs+((etParts(dayMs+12*3600e3).h===8)?13:14)*3600e3+30*60e3}
+async function fetchBars(day){
+  const [Y,M,D]=day.date.split('-').map(Number),sd=Date.UTC(Y,M-1,D);let pd=sd-864e5;while([0,6].includes(new Date(pd).getUTCDay()))pd-=864e5;
+  const pOpen=openUtc(pd),sOpen=openUtc(sd),lastExit=Math.max(sOpen+390*60e3,...(day.trades||[]).map(r=>r[3]||0));
+  const p1=Math.floor((pOpen-3600e3)/1000),p2=Math.floor((Math.max(sOpen+395*60e3,lastExit+600e3))/1000);
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/MES=F?interval=5m&period1=${p1}&period2=${p2}`;
+  const o=await MCP.callTool('host:claude_browser','preview_start',{url});const tab=(resText(o).match(/tabId\s+([\w-]+)/)||[])[1];
+  const g=await MCP.callTool('host:claude_browser','get_page_text',tab?{tabId:tab,max_chars:400000}:{max_chars:400000});
+  const js=pickJson(resText(g));const res=js&&js.chart&&js.chart.result&&js.chart.result[0];if(!res)throw{code:'no_data'};
+  const q=res.indicators.quote[0];let rows=res.timestamp.map((t,i)=>[t*1000,q.open[i],q.high[i],q.low[i],q.close[i]]).filter(r=>r[1]!=null&&r[4]!=null);
+  const k=2/21;let e=null;rows.forEach(r=>{e=e==null?r[4]:r[4]*k+e*(1-k);r.push(Math.round(e*100)/100)});
+  const prev=rows.filter(r=>r[0]>=pOpen&&r[0]<pOpen+390*60e3),on=rows.filter(r=>r[0]>=pOpen+390*60e3&&r[0]<sOpen),endMs=Math.max(sOpen+390*60e3,lastExit+1);
+  const dayRows=rows.filter(r=>r[0]>=sOpen&&r[0]<endMs);if(!dayRows.length)throw{code:'no_data'};
+  const bars=dayRows.map(r=>[r[1],r[2],r[3],r[4],r[5]]);const lo=Math.min(...bars.map(b=>b[2])),hi=Math.max(...bars.map(b=>b[1]));
+  const cand=[];if(prev.length){cand.push([prev[prev.length-1][4],'昨收'],[Math.max(...prev.map(r=>r[2])),'昨高'],[Math.min(...prev.map(r=>r[3])),'昨低'])}
+  if(on.length){cand.push([Math.max(...on.map(r=>r[2])),'夜盤高'],[Math.min(...on.map(r=>r[3])),'夜盤低'])}
+  const levels=[];cand.forEach(([p,n])=>{if(p>=lo-25&&p<=hi+25&&!levels.some(x=>Math.abs(x[0]-p)<1))levels.push([p,n])});
+  return {bars,levels,prevInfo:prev.length?{c:prev[prev.length-1][4],h:Math.max(...prev.map(r=>r[2])),l:Math.min(...prev.map(r=>r[3]))}:null,onInfo:on.length?{h:Math.max(...on.map(r=>r[2])),l:Math.min(...on.map(r=>r[3]))}:null}}
+function reviewPrompt(day,bars,info){
+  const om=day.openMin??(21*60+30),tl=m=>{const x=om+m,hh=Math.floor(x/60)%24;return hh+':'+String(x%60).padStart(2,'0')};
+  const bl=bars.map((b,i)=>`#${i+1} ${tl(i*5)} 開${b[0]} 高${b[1]} 低${b[2]} 收${b[3]} EMA${b[4]}`).join('\n');
+  const pl=(day.pos||[]).map((p,k)=>{const fs=(day.fills||[]).filter(f=>f[0]===k);const en=fs.map(f=>`${f[3]}×${f[6]}@${barLab(Math.floor(f[2]/5)+1)}`).join('、');const chips=((day.notes||[])[k]||{c:[]}).c.map(c=>c[1]).join('、');
+    return `部位${k+1} ${p[0]==='Long'?'做多':'放空'} ${p[1]} 口 ${p[6]}→${p[7]} 進場 ${en} 出場 ${p[3]}@${barLab(p[9])} 淨 ${p[4]} 累計 ${p[5]} 標記：${chips}`}).join('\n');
+  const lv=[info.prevInfo?`昨收 ${info.prevInfo.c}、昨高 ${info.prevInfo.h}、昨低 ${info.prevInfo.l}`:'',info.onInfo?`夜盤高 ${info.onInfo.h}、夜盤低 ${info.onInfo.l}`:''].filter(Boolean).join('；');
+  return `你是使用 Al Brooks 價格行為學的 MES（微型 S&P 500 期貨）日內交易教練，正在幫交易者做盤後檢討。圖是 5 分鐘 K 線，均線是 20 EMA，時間是台灣時間。
+交易者的規則：每日停損 $500；連虧 3 筆就離場；虧損後只能一口。
+價位：${lv||'無'}
+當天美股時段 K 棒：
+${bl}
+交易者實際的部位（同時出場的成交合併為一個部位）：
+${pl}
+請逐一檢討每個部位：當時的背景（趨勢或區間、always-in 方向、和 EMA 的關係）、進場位置和訊號棒好不好、方向對不對、問題在哪或做對了什麼。每個部位 1～3 句、80 字以內，具體提到棒號和價位，正體中文，口吻直接，像坐在旁邊講盤。
+另外列出照規則應該叫停或提醒的時間點（最多 3 個，沒有就給空陣列），以及一段 2～3 句的整體總結。只根據上面的資料，不要編造。
+只回覆 JSON：{"positions":[{"n":1,"t":"..."}],"intervene":[["22:16，第 2 個部位停損後","說明"]],"summary":"..."}`}
+async function runReview(date,btn){
+  const d=DAYS[date];if(!d||!SAMPLE||!DB||BUSY[date])return;BUSY[date]=true;if(btn)btn.disabled=true;
+  const say=t=>{BARST[date]=t;const e=$('revSt');if(e&&CUR===date)e.textContent=t};
+  say('Claude 正在逐筆檢討…（約 30～90 秒）');
+  try{
+    const pb=d.prevBars||[],lv=d.levels||[],f=n=>(lv.find(x=>x[1]===n)||[])[0];
+    const info={bars:d.bars,prevInfo:pb.length?{c:pb[pb.length-1][3],h:Math.max(...pb.map(b=>b[1])),l:Math.min(...pb.map(b=>b[2]))}:null,onInfo:(f('夜盤高')!=null||f('夜盤低')!=null)?{h:f('夜盤高')??'?',l:f('夜盤低')??'?'}:null};
+    const out=await SAMPLE.json(reviewPrompt(d,d.bars,info),{cache:false});
+    const notes=(d.notes||[]).map(n=>({c:n.c||[],t:n.t||''}));(Array.isArray(out&&out.positions)?out.positions:[]).forEach(p=>{const k=(p.n|0)-1;if(notes[k])notes[k].t=String(p.t||'').slice(0,400)});
+    const iv=(Array.isArray(out&&out.intervene)?out.intervene:[]).filter(x=>Array.isArray(x)&&x.length>=2).slice(0,3).map(x=>[String(x[0]).slice(0,60),String(x[1]).slice(0,300)]);
+    const patch={notes,intervene:iv,reviewedAt:new Date().toISOString()};if(out&&out.summary)patch.compareNote=String(out.summary).slice(0,600);
+    BARST[date]='';await DB.doc('days/'+date).update(patch);
+  }catch(e){say(({bad_key:'Anthropic API key 無效，到「設定」檢查。',no_credit:'Anthropic 帳戶餘額不足。',rate_limited:'用量暫時到上限，稍後再試。',invalid_json:'檢討結果格式有誤，再按一次試試。',bad_model:'模型名稱不對，到「設定」檢查。',no_token:'沒有 GitHub token，存不了結果。'})[e&&e.code]||'逐筆檢討沒有完成，稍後再試。');if(btn)btn.disabled=false}
+  finally{BUSY[date]=false}
+}
+async function autoFill(date){
+  if(BUSY[date])return;const day=DAYS[date]||null;if(!MCP||!DB){barSt(date,'自動抓 K 線需要在 Claude 桌面版打開這個頁面。');return}
+  BUSY[date]=true;
+  try{
+    let d=day;for(let i=0;!d&&i<20;i++){await new Promise(r=>setTimeout(r,250));d=DAYS[date]}
+    if(!d)throw{code:'no_day'};
+    barSt(date,'正在用桌面版瀏覽器抓 5 分鐘 K 線…（第一次會詢問是否允許）');
+    const info=await fetchBars(d);
+    await DB.doc('days/'+date).update({bars:info.bars,levels:info.levels,needsBars:false,barsAt:new Date().toISOString()});
+    barSt(date,'K 線已補上。');
+    if(SAMPLE){
+      barSt(date,'K 線已補上，Claude 正在逐筆檢討…（約 30～90 秒）');
+      try{const out=await SAMPLE.json(reviewPrompt(d,info.bars,info),{cache:false});
+        const notes=(d.notes||[]).map(n=>({c:n.c||[],t:n.t||''}));(Array.isArray(out&&out.positions)?out.positions:[]).forEach(p=>{const k=(p.n|0)-1;if(notes[k])notes[k].t=String(p.t||'').slice(0,400)});
+        const iv=(Array.isArray(out&&out.intervene)?out.intervene:[]).filter(x=>Array.isArray(x)&&x.length>=2).slice(0,3).map(x=>[String(x[0]).slice(0,60),String(x[1]).slice(0,300)]);
+        const patch={notes,intervene:iv,reviewedAt:new Date().toISOString()};if(out&&out.summary)patch.compareNote=String(out.summary).slice(0,600);
+        await DB.doc('days/'+date).update(patch);barSt(date,'K 線和逐筆檢討都已補上。')}
+      catch(e){barSt(date,({not_granted:'K 線已補上；沒有允許頁面使用 Claude，所以沒有逐筆分析。',rate_limited:'K 線已補上；用量暫時到上限，逐筆分析稍後再請 Claude 補。',invalid_json:'K 線已補上；逐筆分析格式有誤，稍後再試。'})[e&&e.code]||'K 線已補上；逐筆分析沒有完成，稍後再試。')}
+    }
+  }catch(e){
+    const c=e&&e.code;
+    barSt(date,({no_data:'Yahoo 沒有回傳這一天的 K 線（可能還沒收盤或日期不對）。',server_not_connected:'沒有連到桌面版的瀏覽器。請在 Claude 桌面版打開這個頁面再試，或回到對話請 Claude 補。',not_granted:'沒有允許頁面使用桌面版瀏覽器。',cancelled:'已取消。',no_day:'找不到這一天的資料。'})[c]||'抓 K 線失敗。可以再按一次，或回到對話請 Claude 補。');
+  }finally{BUSY[date]=false;if(CUR===date&&!(DAYS[date]&&(DAYS[date].bars||[]).length))renderDay()}
+}
+
+let IMP=null;
+function renderImport(){
+  const w=$('importWrap');w.replaceChildren();if(!IMP)return;
+  const s=h('section','panel imp');s.append(h('h2',null,'新增交易日：貼上 TopstepX 的成交紀錄'));
+  const ta=document.createElement('textarea');ta.id='impText';ta.placeholder='把 Trades 列表整段複製貼上（含不含標題列都可以）。直式（一欄一行）或表格（Tab 分隔）兩種格式都支援。';ta.value=IMP.text||'';ta.setAttribute('aria-label','成交紀錄');
+  ta.addEventListener('input',()=>{IMP.text=ta.value;IMP.doc=null;IMP.armed=false;paintPreview()});
+  const out=h('div');out.id='impOut';s.append(ta,out);w.append(s);paintPreview();ta.focus();
+}
+function paintPreview(){
+  const out=$('impOut');if(!out)return;out.replaceChildren();const txt=(IMP.text||'').trim();
+  const row=h('div','row2');const cancel=h('button','linkbtn','取消');cancel.type='button';cancel.addEventListener('click',()=>{IMP=null;renderImport()});
+  if(!txt){out.append(row);row.append(cancel);return}
+  const {trades,errs}=parseTrades(txt);
+  if(!trades.length){out.append(h('p','err','讀不到成交紀錄。請確認是從 TopstepX 的 Trades 列表整段複製，每筆以編號開頭。'));out.append(row);row.append(cancel);return}
+  const doc=IMP.doc||(IMP.doc=buildDay(trades));const st=doc.stats;
+  const sum=h('div','sum');[['交易日',doc.label],['部位 / 成交',`${doc.pos.length} / ${trades.length} 筆`],['淨損益',money(st.net)],['最大同時持倉',st.maxLots+' 口'],['規則觸發',st.ruleTime?`${st.ruleTime}　${st.ruleText}`:'未觸發']].forEach(([k,v])=>{const d=h('div',null,k);d.append(h('b',null,v));sum.append(d)});out.append(sum);
+  if(errs.length)out.append(h('p','err',`有 ${errs.length} 筆讀不懂，已略過：${errs.slice(0,3).join('、')}${errs.length>3?'…':''}`));
+  const exists=!!DAYS[doc.date];
+  if(exists)out.append(h('p','err',`${doc.label} 已經有資料。覆蓋後部位會重新編號，原本寫的部位檢討可能對不上。`));
+  const go=h('button','linkbtn primary',exists?'覆蓋這一天':'建立交易日');go.type='button';
+  go.addEventListener('click',async()=>{if(exists&&!IMP.armed){IMP.armed=true;go.textContent='再按一次確認覆蓋';setTimeout(()=>{if(IMP){IMP.armed=false;go.textContent='覆蓋這一天'}},4000);return}
+    go.disabled=true;go.textContent='儲存中…';try{await DB.doc('days/'+doc.date).set(doc);CUR=doc.date;IMP=null;renderImport();fillSelect();renderDay();scrollTo(0,0)}catch(e){go.disabled=false;go.textContent=exists?'覆蓋這一天':'建立交易日';out.append(h('p','err',(e&&e.code)==='invalid_argument'?'資料太大或格式不符，存不進去':'儲存失敗，稍後再試'))}});
+  row.append(go,cancel,h('span','sub','建立後回到對話請 Claude 補 K 線，其他功能可以先用。'));out.append(row);
+}
+$('importBtn').addEventListener('click',()=>{if(!DB)return;IMP=IMP?null:{text:''};renderImport()});
+
+
+/* today's background bias */
+let biasChain=Promise.resolve(),PREALL={};
+function biasCard(){
+  const s=h('section','panel box focus bias');const hd=h('div','fig-head');hd.append(h('h2',null,'第一件事：今天的背景判斷'),Object.assign(h('span','prog'),{id:'biasSt'}));s.append(hd);
+  s.append(h('p',null,'看完開盤前 3～6 根 K 棒再填。逆著這個判斷的單，必須有 Brooks 的反轉訊號棒，而且只能一口。'));
+  const opts=h('div','bias-opts');[['多頭','偏多：順勢只找買點'],['空頭','偏空：順勢只找賣點'],['區間','區間：只在上下緣反向做']].forEach(([v,d])=>{const b=h('button','bias-opt');b.type='button';b.dataset.v=v;b.disabled=!DB;b.append(h('b',null,v),h('span',null,d));b.addEventListener('click',()=>{PRE={...(PRE||{}),bias:(PRE&&PRE.bias)===v?'':v};applyPre();savePre()});opts.append(b)});s.append(opts);
+  const ta=document.createElement('textarea');ta.id='biasNote';ta.className='cap';ta.rows=1;ta.placeholder='理由：例如「跳空開在昨低下方、EMA 下方，消息面砸下來」';ta.setAttribute('aria-label','背景判斷的理由');ta.disabled=!DB;let tm=null;
+  ta.addEventListener('input',()=>{grow(ta);preSt('未儲存');clearTimeout(tm);tm=setTimeout(()=>{PRE={...(PRE||{}),biasNote:ta.value};savePre()},900)});
+  ta.addEventListener('blur',()=>{clearTimeout(tm);if(ta.value!==String((PRE||{}).biasNote||'')){PRE={...(PRE||{}),biasNote:ta.value};savePre()}});
+  s.append(ta);return s}
+
+/* pre-market */
+function todayTPE(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}catch(e){return new Date().toISOString().slice(0,10)}}
+const TODAY=todayTPE();
+const CHECKS=[
+  ['limit','TopstepX 的 MES 口數上限已設好','Settings → Risk → Contract Limits，超過上限的單會被平台擋下'],
+  ['one','下單面板預設 1 口','快捷按鈕只留小口數，避免一鍵下大單'],
+  ['stop','今天虧到 $500 就關平台','碰到就收工，不想辦法凹回來'],
+  ['noadd','部位虧損中不加碼','不攤平；要加碼只能加在賺錢的部位'],
+  ['send','每筆虧損出場後，先把成交紀錄傳給 Claude','傳資料的這段時間就是離開盤面'],
+  ['three','連虧 3 筆就離場','照自己的規則，不討價還價']
+];
+let PRE=null,preChain=Promise.resolve(),preDirty=false;
+function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textContent=t})}
+function savePre(){if(!DB)return;const body={date:TODAY,checks:{...((PRE||{}).checks||{})},plan:String((PRE||{}).plan||''),bias:String((PRE||{}).bias||''),biasNote:String((PRE||{}).biasNote||''),updatedAt:new Date().toISOString()};preSt('儲存中…');preChain=preChain.then(()=>DB.doc('premarket/'+TODAY).set(body)).then(()=>preSt('已儲存')).catch(()=>preSt('儲存失敗，稍後再試'))}
+function applyPre(){const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('biasNote');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v){bn.value=v;grow(bn)}}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=`${n} / ${CHECKS.length} 完成`;const ta=$('prePlan');if(ta&&document.activeElement!==ta){const v=String((PRE&&PRE.plan)||'');if(ta.value!==v){ta.value=v;grow(ta)}}}
+function markSize(text,parent){const re=/(艙位|倉位|口數|\d+\s*口)/g;let last=0,m;while((m=re.exec(text))){if(m.index>last)parent.append(document.createTextNode(text.slice(last,m.index)));parent.append(h('mark',null,m[0]));last=m.index+m[0].length}if(last<text.length)parent.append(document.createTextNode(text.slice(last)))}
+function renderPre(){
+  const body=$('preBody');
+  if(document.activeElement&&['prePlan','biasNote'].includes(document.activeElement.id)){preDirty=true;return}
+  preDirty=false;body.replaceChildren();
+  const wrap=h('div');wrap.style.cssText='display:grid;gap:16px';
+  const wd=['日','一','二','三','四','五','六'][new Date(TODAY+'T12:00:00').getDay()];
+  const head=h('div','pre-head');head.append(h('h3',null,'開盤前看一遍，再打開下單面板'),h('span','date',`${TODAY.replace(/-/g,'/')}（${wd}）`));wrap.append(head);
+  wrap.append(biasCard());
+  const ds=Object.values(DAYS).sort((a,b)=>a.date<b.date?1:-1),last=ds[0];
+  const grid=h('div','pre-grid'),left=h('div','pre-col'),right=h('div','pre-col');grid.append(left,right);wrap.append(grid);
+  /* focus card from last day */
+  const fc=h('section','panel box focus');fc.append(h('h2',null,'今天最重要的一件事'));
+  if(last){
+    const st=last.stats||{},quotes=(last.pos||[]).map((p,k)=>[k+1,String((REV[memoId(last.date,k)]||{}).text||'').trim()]).filter(q=>q[1]);
+    const sizeHits=quotes.filter(q=>/艙位|倉位/.test(q[1])).length;
+    const msg=sizeHits?`控制口數。上個交易日你在 ${sizeHits} 筆檢討裡寫到倉位太大，最大同時持倉 ${st.maxLots||'?'} 口。`:(st.maxLots>1?`控制口數。上個交易日最大同時持倉 ${st.maxLots} 口。`:'照計畫交易，守住規則。');
+    fc.append(h('p','big',msg));
+    if(st.ruleTime)fc.append(h('p',null,`上個交易日 ${st.ruleTime} 就觸發規則（${st.ruleText||''}），之後還做了 ${st.afterStop||0} 個部位。`));
+    left.append(fc);
+    const rv=h('section','panel box');const rh=h('div');rh.style.cssText='display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap';rh.append(h('h2',null,`你在 ${last.label||last.date} 寫的檢討`));
+    const go=h('button','linkbtn','看當天圖');go.type='button';go.addEventListener('click',()=>{CUR=last.date;$('daySel').value=CUR;renderDay();showTab('tab-day');scrollTo(0,0)});rh.append(go);rv.append(rh);
+    if(!quotes.length)rv.append(h('p',null,'那天還沒寫檢討。'));
+    const ql=h('div');quotes.forEach(([n,t])=>{const q=h('div','quote');q.append(h('span','qn','#'+n));const qt=h('span','qt');markSize(t,qt);q.append(qt);ql.append(q)});rv.append(ql);left.append(rv);
+  }else{fc.append(h('p','big','還沒有交易日資料。收盤後把成交紀錄貼給 Claude，這裡就會出現上個交易日的重點。'));left.append(fc)}
+  /* setups */
+  const sp=h('section','panel box');sp.append(h('h2',null,'今天要找的型態'));const mini=h('div','mini');
+  if(!CASES.length)mini.append(h('p',null,'手冊裡還沒有案例。'));
+  [...CASES].sort((a,b)=>a.date<b.date?1:-1).forEach(c=>{const it=h('div','it');it.append(h('b',null,c.title||''),h('span',null,[c.entry,c.target].filter(Boolean).join('；')));mini.append(it)});
+  sp.append(mini);left.append(sp);
+  const lz=allLessons();if(lz.length){const pc=h('section','panel box');pc.append(h('h2',null,'注意事項（從圖解筆記整理）'));const ol=h('ol','principles');lz.slice(0,8).forEach(([l,d])=>{const li=h('li',null,l);li.append(h('span','d',d.slice(5).replace('-','/')));ol.append(li)});pc.append(ol);left.append(pc)}
+  /* checklist */
+  const ck=h('section','panel box');const ch=h('div');ch.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:baseline';const pg=h('span','prog');pg.id='preProg';ch.append(h('h2',null,'盤前確認清單'),pg);ck.append(ch);
+  const list=h('div','checks');
+  CHECKS.forEach(([id,t,s])=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;const sp2=h('span',null,t);sp2.append(h('small',null,s));lb.append(cb,sp2);
+    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});list.append(lb)});
+  ck.append(list);right.append(ck);
+  /* plan */
+  const pl=h('section','panel box plan');const ph=h('div');ph.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:baseline';const ps=h('span','prog');ps.id='preSt';ph.append(h('h2',null,'今日計畫'),ps);
+  const ta=document.createElement('textarea');ta.id='prePlan';ta.rows=3;ta.placeholder='今天的關鍵價位、要等的型態、最多做幾筆…';ta.setAttribute('aria-label','今日計畫');ta.disabled=!DB;let tmr=null;
+  ta.addEventListener('input',()=>{grow(ta);preSt('未儲存');clearTimeout(tmr);tmr=setTimeout(()=>{PRE={...(PRE||{}),plan:ta.value};savePre()},900)});
+  ta.addEventListener('blur',()=>{clearTimeout(tmr);if(ta.value!==String((PRE||{}).plan||'')){PRE={...(PRE||{}),plan:ta.value};savePre()}if(preDirty)setTimeout(renderPre,0)});
+  pl.append(ph,ta);right.append(pl);
+  /* rules */
+  const rr=h('section','panel box');rr.append(h('h2',null,'我的風控規則'));const ol=h('ol');((RULES&&RULES.items)||[]).forEach(it=>{const li=h('li');li.append(h('b',null,it.t),document.createTextNode(it.d?'：'+it.d:''));ol.append(li)});rr.append(ol);right.append(rr);
+  body.append(wrap);applyPre();requestAnimationFrame(()=>{const t=$('prePlan');if(t)grow(t)});
+}
+
+function fillSelect(){const sel=$('daySel'),ds=Object.keys(DAYS).sort().reverse();sel.replaceChildren();if(!ds.length){sel.append(new Option('尚無資料',''));sel.disabled=true;return}ds.forEach(d=>sel.append(new Option(DAYS[d].label||d,d)));sel.disabled=false;if(!CUR||!DAYS[CUR])CUR=ds[0];sel.value=CUR}
+$('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
+
+/* settings dialog + sync status */
+(()=>{
+  const dlg=$('setDlg'),gh=$('setGh'),ai=$('setAi'),md=$('setModel'),msg=$('setMsg');$('setRepo').textContent=MJ.repo;
+  const open=()=>{gh.value=MJ.get(MJ.keys.gh);ai.value=MJ.get(MJ.keys.ai);md.value=MJ.get(MJ.keys.model)||MJ.defaultModel;msg.textContent='';dlg.showModal()};
+  $('setBtn').addEventListener('click',open);$('setCancel').addEventListener('click',()=>dlg.close());
+  let armed=false;const clr=$('setClear');clr.addEventListener('click',()=>{if(!armed){armed=true;clr.textContent='再按一次確認清除';setTimeout(()=>{armed=false;clr.textContent='清除金鑰'},4000);return}
+    MJ.set(MJ.keys.gh,'');MJ.set(MJ.keys.ai,'');location.reload()});
+  $('setForm').addEventListener('submit',async e=>{e.preventDefault();const t=gh.value.trim(),k=ai.value.trim(),m=md.value.trim();
+    if(MJ.pending()){msg.textContent='還有資料在儲存，稍等再按一次';return}
+    if(t){msg.textContent='檢查 GitHub token…';const r=await MJ.checkToken(t).catch(()=>({ok:false,msg:'連不到 GitHub'}));if(!r.ok){msg.textContent=r.msg;return}}
+    if(k&&!/^sk-ant-/.test(k)){msg.textContent='Anthropic API key 通常是 sk-ant- 開頭，請再確認';return}
+    MJ.set(MJ.keys.gh,t);MJ.set(MJ.keys.ai,k);MJ.set(MJ.keys.model,m&&m!==MJ.defaultModel?m:'');location.reload()});
+  const st=$('syncSt');
+  MJ.onStatus(s=>{st.className='sync'+(s.mode==='error'?' err':s.mode==='readonly'?' warn':'');
+    st.textContent={loading:'讀取中…',ready:'已同步',saving:'儲存中…',readonly:'唯讀：到「設定」填 GitHub token',error:s.error||'同步失敗'}[s.mode]||''});
+})();
+
+(async()=>{
+  const db=await window.claude?.use?.('db');
+  if(!db){$('dayBody').replaceChildren(h('div','panel empty','這個檢視無法讀取日誌資料，請在 claude.ai 開啟這個頁面。'));return}
+  DB=db;
+  try{ASSETS=await window.claude.use('assets')}catch(e){ASSETS=null}
+  try{SAMPLE=await window.claude.use('sample')}catch(e){SAMPLE=null}
+  let daysReady=false;
+  db.collection('days').onSnapshot(q=>{const prevCur=CUR,prevDoc=DAYS[CUR];DAYS={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)DAYS[v.date]=v});fillSelect();daysReady=true;
+    if(CUR!==prevCur||DAYS[CUR]!==prevDoc)renderDay();renderOver();renderBook();renderPre();if(CHARTS.length)fillCharts()},()=>{});
+  db.collection('reviews').onSnapshot(q=>{REV={};q.docs.forEach(d=>{REV[d.id]=d.data()});applyReviews();if(daysReady){renderOver();renderPre()}},()=>{});
+  db.doc('handbook/rules').onSnapshot(s=>{RULES=s.exists?s.data():null;renderBook();renderPre()},()=>{});
+  db.collection('cases').onSnapshot(q=>{CASES=q.docs.map(d=>d.data());renderBook();renderPre()},()=>{});
+  db.collection('charts').onSnapshot(q=>{CHARTS=q.docs.map(d=>({id:d.id,...d.data()}));fillCharts();renderBook();renderPre()},()=>{});
+  db.collection('premarket').onSnapshot(q=>{PREALL={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)PREALL[v.date]=v});if(!(q.metadata&&q.metadata.hasPendingWrites)){PRE=PREALL[TODAY]||null;applyPre()}if(DAYS[CUR]&&!document.activeElement?.closest?.('#dayBody'))renderDay()},()=>{});
+})();
+</script>
+</body>
+</html>
