@@ -883,6 +883,7 @@ function todayTPE(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'
 const TODAY=todayTPE();
 const CHECKS=[
   ['send','每筆虧損出場後，先把成交紀錄傳給 Claude','傳資料的這段時間就是離開盤面'],
+  ['early','提前離場，避免保護性止損被打到','一根對你不利的大 K 棒，是出場的好理由；兩根對你不利的中等 K 棒，是出場的合理理由；連續對你不利的小 K 棒，也是出場的合理理由'],
   ['one','帳面虧損超過 $100 時，只能下一口單','先把虧損打平；打平之前不放大口數'],
   ['noadd','部位虧損中不加碼','不攤平；要加碼只能加在賺錢的部位'],
   ['three','連虧 3 筆就離場','照自己的規則，不討價還價'],
