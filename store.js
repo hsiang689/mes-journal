@@ -334,6 +334,23 @@
     get: LS.get, set: LS.set, status, onStatus: (f) => { statusCbs.push(f); f(status); },
     hasToken: () => !!token(), hasKey: () => !!LS.get(K.ai),
     pending: () => Object.keys(S.ops).length,
+    async checkKey(key, model) {
+      let r;
+      try {
+        r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+          body: JSON.stringify({ model: model || DEFAULT_MODEL, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+        });
+      } catch (e) { return { ok: false, msg: '連不到 Anthropic，檢查網路後再試' }; }
+      if (r.ok) return { ok: true };
+      let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) {}
+      if (r.status === 401 || r.status === 403) return { ok: false, msg: 'Anthropic API key 無效' };
+      if (r.status === 402 || /credit|balance|billing/i.test(m)) return { ok: false, msg: 'key 有效，但帳戶餘額不足，請到 console 儲值' };
+      if (r.status === 404 || /model/i.test(m)) return { ok: false, msg: `找不到模型「${model || DEFAULT_MODEL}」，檢查模型名稱` };
+      if (r.status === 429 || r.status === 529) return { ok: true, warn: 'key 有效，但 Anthropic 目前忙碌或用量到上限' };
+      return { ok: false, msg: 'Anthropic 回應 ' + r.status + (m ? '：' + m : '') };
+    },
     async checkToken(t) {
       const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}`, { headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + t }, cache: 'no-store' });
       if (!r.ok) return { ok: false, msg: r.status === 401 ? 'token 無效' : r.status === 404 ? `token 看不到 ${OWNER}/${REPO}` : 'GitHub 回應 ' + r.status };

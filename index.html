@@ -861,7 +861,9 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   $('setForm').addEventListener('submit',async e=>{e.preventDefault();const t=gh.value.trim(),k=ai.value.trim(),m=md.value.trim();
     if(MJ.pending()){msg.textContent='還有資料在儲存，稍等再按一次';return}
     if(t){msg.textContent='檢查 GitHub token…';const r=await MJ.checkToken(t).catch(()=>({ok:false,msg:'連不到 GitHub'}));if(!r.ok){msg.textContent=r.msg;return}}
-    if(k&&!/^sk-ant-/.test(k)){msg.textContent='Anthropic API key 通常是 sk-ant- 開頭，請再確認';return}
+    if(k){if(!/^sk-ant-/.test(k)){msg.textContent='Anthropic API key 通常是 sk-ant- 開頭，請再確認';return}
+      msg.textContent='測試 Anthropic API key…';const r=await MJ.checkKey(k,m||MJ.defaultModel);if(!r.ok){msg.textContent=r.msg;return}
+      if(r.warn){msg.textContent=r.warn+'，已儲存';await new Promise(s=>setTimeout(s,1500))}}
     MJ.set(MJ.keys.gh,t);MJ.set(MJ.keys.ai,k);MJ.set(MJ.keys.model,m&&m!==MJ.defaultModel?m:'');location.reload()});
   const st=$('syncSt');
   MJ.onStatus(s=>{st.className='sync'+(s.mode==='error'?' err':s.mode==='readonly'?' warn':'');
