@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https://raw.githubusercontent.com; connect-src blob: https://api.github.com https://raw.githubusercontent.com https://api.anthropic.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src blob: https://api.github.com https://api.anthropic.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#f3f5f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1418" media="(prefers-color-scheme: dark)">
@@ -291,7 +291,7 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
     <label>GitHub token
       <input type="password" id="setGh" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
     </label>
-    <p class="hint">到 GitHub → Settings → Developer settings → Fine-grained tokens 建立：Repository access 只選 <b id="setRepo"></b>，Permissions 的 Contents 選 Read and write，其他都不用。沒填就是唯讀，只能看不能存。</p>
+    <p class="hint">到 GitHub → Settings → Developer settings → Fine-grained tokens 建立：Repository access 只選 <b id="setRepo"></b>，Permissions 的 Contents 選 Read and write，其他都不用。資料放在私人 repo，沒填 token 就讀不到。</p>
     <label>Anthropic API key（圖解筆記整理注意事項、逐筆檢討用）
       <input type="password" id="setAi" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
     </label>
@@ -647,7 +647,7 @@ function fillCharts(){
     if(total>1){const nav=h('span','fnav');const pv=h('button','linkbtn','←');pv.type='button';pv.setAttribute('aria-label','較新的一張');pv.disabled=noteIdx===0;pv.addEventListener('click',()=>stepNote(-1));
       const nx=h('button','linkbtn','→');nx.type='button';nx.setAttribute('aria-label','較舊的一張');nx.disabled=noteIdx>=total-1;nx.addEventListener('click',()=>stepNote(1));
       nav.append(pv,h('span','prog',`${noteIdx+1} / ${total}`),nx);acts.append(nav)}
-    if(SAMPLE){const rb=h('button','linkbtn','重新整理');rb.type='button';rb.title='重新讀圖，更新整理出的注意事項';let armedR=false,tmoR=null;rb.addEventListener('click',async()=>{if(!armedR){armedR=true;rb.textContent='再按一次確認重新整理';tmoR=setTimeout(()=>{armedR=false;rb.textContent='重新整理'},4000);return}clearTimeout(tmoR);armedR=false;rb.textContent='重新整理';rb.disabled=true;try{const bl=await fetch(MJ.assetUrl(c.asset)).then(r=>{if(!r.ok)throw 0;return r.blob()});await analyzeShot(c.id,bl,false)}catch(e){setFig(c.id,'讀不到這張圖，稍後再試')}finally{rb.disabled=false}});acts.append(rb)}
+    if(SAMPLE){const rb=h('button','linkbtn','重新整理');rb.type='button';rb.title='重新讀圖，更新整理出的注意事項';let armedR=false,tmoR=null;rb.addEventListener('click',async()=>{if(!armedR){armedR=true;rb.textContent='再按一次確認重新整理';tmoR=setTimeout(()=>{armedR=false;rb.textContent='重新整理'},4000);return}clearTimeout(tmoR);armedR=false;rb.textContent='重新整理';rb.disabled=true;try{const bl=await MJ.assetBlob(c.asset);await analyzeShot(c.id,bl,false)}catch(e){setFig(c.id,'讀不到這張圖，稍後再試')}finally{rb.disabled=false}});acts.append(rb)}
     acts.append(st);
     if(ASSETS){const del=h('button','linkbtn danger','刪除這張圖');del.type='button';let armed=false,tmo=null;
       del.addEventListener('click',async()=>{if(!armed){armed=true;del.textContent='再按一次確認刪除';tmo=setTimeout(()=>{armed=false;del.textContent='刪除這張圖'},4000);return}
@@ -683,7 +683,7 @@ async function analyzeShot(id,blob,overwrite){
 }
 const ZST={};
 function zoomer(id,src,alt){
-  const wrap=h('div','zoom'),stage=h('div','zstage'),img=document.createElement('img');img.src=src;img.alt=alt;img.draggable=false;img.loading='lazy';stage.append(img);
+  const wrap=h('div','zoom'),stage=h('div','zstage'),img=document.createElement('img');if(src&&typeof src.then==='function')src.then(u=>{img.src=u}).catch(()=>img.dispatchEvent(new Event('error')));else img.src=src;img.alt=alt;img.draggable=false;img.loading='lazy';stage.append(img);
   img.addEventListener('error',()=>{wrap.replaceWith(h('div','panel empty','圖片暫時無法顯示'))});
   const st=ZST[id]||(ZST[id]={s:1,x:0,y:0});
   const bar=h('div','zbar'),lab=h('span','zl');
@@ -762,7 +762,7 @@ let MCP=null;const BARST={},BUSY={};
 function barSt(date,t){BARST[date]=t;const e=$('barSt');if(e&&CUR===date)e.textContent=t}
 function barsPlaceholder(day){
   const w=h('div','empty');w.style.cssText='display:grid;gap:8px;justify-items:center';
-  w.append(h('p',null,`${day.label||CUR} 的 K 線還沒補上。部位檢討和統計已經可以用。`),h('p','sub',`收盤後 GitHub Actions 會自動抓 Yahoo 的 5 分 K 補上，通常幾分鐘內，頁面會自己更新。很久都沒出現的話，到 repo 的 Actions 手動執行「補 K 線」。`));
+  w.append(h('p',null,`${day.label||CUR} 的 K 線還沒補上。部位檢討和統計已經可以用。`),h('p','sub',`收盤後 GitHub Actions 會自動抓 Yahoo 的 5 分 K 補上，通常幾分鐘內，頁面會自己更新。很久都沒出現的話，到 mes-journal-data 的 Actions 手動執行「補 K 線」。`));
   return w}
 function resText(r){if(r==null)return'';if(typeof r==='string')return r;if(typeof r.payload==='string')return r.payload;const c=(r.content||[]).map(b=>b&&b.text||'').join('\n');return c||(r.payload!=null?JSON.stringify(r.payload):'')}
 function pickJson(txt){const i=txt.indexOf('{"chart"');if(i<0)return null;for(let j=txt.lastIndexOf('}');j>i;j=txt.lastIndexOf('}',j-1)){try{return JSON.parse(txt.slice(i,j+1))}catch(e){}}return null}
@@ -958,9 +958,10 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
       msg.textContent='測試 Anthropic API key…';const r=await MJ.checkKey(k,m||MJ.defaultModel);if(!r.ok){msg.textContent=r.msg;return}
       if(r.warn){msg.textContent=r.warn+'，已儲存';await new Promise(s=>setTimeout(s,1500))}}
     MJ.set(MJ.keys.gh,t);MJ.set(MJ.keys.ai,k);MJ.set(MJ.keys.model,m&&m!==MJ.defaultModel?m:'');location.reload()});
+  if(!MJ.hasToken())setTimeout(open,300);
   const st=$('syncSt');
   MJ.onStatus(s=>{st.className='sync'+(s.mode==='error'?' err':s.mode==='readonly'?' warn':'');
-    st.textContent={loading:'讀取中…',ready:'已同步',saving:'儲存中…',readonly:'唯讀：到「設定」填 GitHub token',error:s.error||'同步失敗'}[s.mode]||''});
+    st.textContent={loading:'讀取中…',ready:'已同步',saving:'儲存中…',readonly:'需要 GitHub token 才能讀取資料：按「設定」',error:s.error||'同步失敗'}[s.mode]||''});
 })();
 
 (async()=>{

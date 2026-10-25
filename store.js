@@ -1,6 +1,7 @@
 /* MES 交易日誌 — GitHub 資料層
  * 提供和 claude.ai artifact 相同介面的 window.claude.use('db' | 'assets' | 'sample')，
- * 資料存在這個 repo 的 data/ 底下，寫入時用 GitHub Contents API 直接 commit。
+ * 資料存在另一個私人 repo（預設 <owner>/mes-journal-data）的 data/ 底下，
+ * 讀寫都用 GitHub API 帶 token，沒有 token 就讀不到。
  *   data/days/<YYYY-MM-DD>.json   每個交易日一個檔
  *   data/<collection>.json        其他集合：{ docId: doc }
  *   data/img/<id>.<ext>           截圖
@@ -12,20 +13,17 @@
     get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
     set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} },
   };
-  const K = { gh: 'mj-gh-token', ai: 'mj-anthropic-key', model: 'mj-model', repo: 'mj-repo' };
+  const K = { gh: 'mj-gh-token', ai: 'mj-anthropic-key', model: 'mj-model', repo: 'mj-data-repo' };
   const DEFAULT_MODEL = 'claude-opus-5-5';
 
-  function repoFromLocation() {
+  function dataRepo() {
     const o = LS.get(K.repo);
     if (o && /^[\w.-]+\/[\w.-]+$/.test(o)) return o.split('/');
     const host = location.hostname;
-    if (host.endsWith('.github.io')) {
-      const seg = location.pathname.split('/').filter(Boolean)[0];
-      return [host.split('.')[0], seg || host];
-    }
-    return ['hsiang689', 'mes-journal'];
+    const owner = host.endsWith('.github.io') ? host.split('.')[0] : 'hsiang689';
+    return [owner, 'mes-journal-data'];
   }
-  const [OWNER, REPO] = repoFromLocation();
+  const [OWNER, REPO] = dataRepo();
   const BRANCH = 'main';
   const SPLIT = { days: true };
   const COLLS = ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket'];
@@ -71,7 +69,13 @@
     return r.status === 204 ? null : r.json();
   }
   const repoPath = (p) => `/repos/${OWNER}/${REPO}${p}`;
-  const rawUrl = (ref, path) => `https://raw.githubusercontent.com/${OWNER}/${REPO}/${ref}/${path}`;
+  // 私人 repo 不能用 raw.githubusercontent.com，改用 contents API 取原始內容
+  async function ghRaw(path, ref) {
+    const t = token(); if (!t) { const e = new Error('no token'); e.status = 401; throw e; }
+    const r = await fetch('https://api.github.com' + repoPath(`/contents/${path}?ref=${ref}`), { headers: { Accept: 'application/vnd.github.raw', 'X-GitHub-Api-Version': '2022-11-28', Authorization: 'Bearer ' + t }, cache: 'no-store' });
+    if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+    return r;
+  }
 
   async function headSha() { const r = await gh(repoPath(`/git/ref/heads/${BRANCH}`)); return r.object.sha; }
 
@@ -85,10 +89,10 @@
       if (SPLIT[c]) {
         Object.keys(sha).filter((p) => p.startsWith(`data/${c}/`) && p.endsWith('.json')).forEach((p) => {
           const id = p.slice(`data/${c}/`.length, -5);
-          jobs.push(fetch(rawUrl(head, p)).then((r) => (r.ok ? r.json() : null)).then((v) => { if (v) data[c][id] = v; }));
+          jobs.push(ghRaw(p, head).then((r) => r.json()).then((v) => { if (v) data[c][id] = v; }));
         });
       } else if (sha[`data/${c}.json`]) {
-        jobs.push(fetch(rawUrl(head, `data/${c}.json`)).then((r) => (r.ok ? r.json() : {})).then((v) => { data[c] = v || {}; }));
+        jobs.push(ghRaw(`data/${c}.json`, head).then((r) => r.json()).then((v) => { data[c] = v || {}; }));
       }
     });
     await Promise.all(jobs);
@@ -228,9 +232,13 @@
   function init() {
     if (!ready) ready = loadAll().then((r) => {
       S.head = r.head; S.sha = r.sha; COLLS.forEach((c) => (S.data[c] = r.data[c])); S.loaded = true;
-      setStatus(token() ? 'ready' : 'readonly');
+      setStatus('ready');
       if (token()) setTimeout(cleanOrphans, 4000);
-    }).catch((e) => { setStatus('error', e.status === 401 ? 'GitHub token 無效' : ('讀不到資料：' + (e.message || e))); throw e; });
+    }).catch((e) => {
+      if (!token()) setStatus('readonly');
+      else setStatus('error', e.status === 401 ? 'GitHub token 無效' : e.status === 404 ? `token 看不到 ${OWNER}/${REPO}` : ('讀不到資料：' + (e.message || e)));
+      throw e;
+    });
     return ready;
   }
 
@@ -265,7 +273,13 @@
 
   /* ---------- 截圖 ---------- */
   const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
-  const assetUrl = (id) => S.localImg[id] || (/\.\w+$/.test(id) ? rawUrl(BRANCH, 'data/img/' + id) : '');
+  const imgJobs = {};
+  function assetBlob(id) { return ghRaw('data/img/' + id, BRANCH).then((r) => r.blob()); }
+  // 有快取就回傳網址字串，沒有就回傳 Promise（下載完成後是 blob: 網址）
+  function assetUrl(id) {
+    if (S.localImg[id]) return S.localImg[id];
+    return imgJobs[id] || (imgJobs[id] = assetBlob(id).then((b) => (S.localImg[id] = URL.createObjectURL(b))).catch((e) => { delete imgJobs[id]; throw e; }));
+  }
   const assets = {
     async upload(file) {
       if (!token()) throw Object.assign(new Error('no token'), { code: 'no_token' });
@@ -352,7 +366,7 @@
     },
   };
   window.MJ = {
-    repo: `${OWNER}/${REPO}`, keys: K, defaultModel: DEFAULT_MODEL, assetUrl,
+    repo: `${OWNER}/${REPO}`, keys: K, defaultModel: DEFAULT_MODEL, assetUrl, assetBlob,
     get: LS.get, set: LS.set, status, onStatus: (f) => { statusCbs.push(f); f(status); },
     hasToken: () => !!token(), hasKey: () => !!LS.get(K.ai),
     pending: () => Object.keys(S.ops).length,
