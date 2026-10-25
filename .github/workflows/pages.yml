@@ -4,7 +4,7 @@ name: 發布網頁
 on:
   push:
     branches: [main]
-    paths: ['index.html', 'store.js', '.github/workflows/pages.yml']
+    paths: ['index.html', 'store.js', 'sw.js', 'manifest.webmanifest', 'icons/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: mkdir _site && cp index.html store.js _site/ && touch _site/.nojekyll
+      - run: mkdir _site && cp -r index.html store.js sw.js manifest.webmanifest icons _site/ && touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

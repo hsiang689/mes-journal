@@ -3,8 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https://raw.githubusercontent.com; connect-src blob: https://api.github.com https://raw.githubusercontent.com https://api.anthropic.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https://raw.githubusercontent.com; connect-src blob: https://api.github.com https://raw.githubusercontent.com https://api.anthropic.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#15202b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MES 日誌">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <title>MES 交易日誌</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+TC:wght@400;500&family=Barlow+Condensed:wght@500&display=swap">
@@ -284,6 +290,7 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
 </dialog>
 
 <script src="store.js"></script>
+<script>if('serviceWorker' in navigator&&isSecureContext)navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 <script>
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
 const fmt=v=>Number(v).toFixed(2);
