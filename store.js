@@ -133,9 +133,9 @@
     return new Promise((res, rej) => (S.waiters[file] = S.waiters[file] || []).push({ res, rej }));
   }
 
-  function flush(file) {
-    S.chain = S.chain.then(() => persist(file)).catch(() => {});
-  }
+  // 所有寫入排成一列依序送出；前一個失敗不會卡住後面的
+  function queue(fn) { const p = S.chain.then(fn); S.chain = p.catch(() => {}); return p; }
+  function flush(file) { queue(() => persist(file)).catch(() => {}); }
 
   async function fetchRemote(file) {
     try {
@@ -211,11 +211,25 @@
   setInterval(poll, 3 * 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
+  // 清掉沒有任何圖解筆記用到的截圖（例如刪除時網路中斷留下的），只清 10 分鐘前上傳的
+  function cleanOrphans() {
+    if (!token() || Object.keys(S.ops).length) return;
+    const used = new Set(Object.values(S.data.charts || {}).map((c) => c && c.asset).filter(Boolean));
+    Object.keys(S.sha).filter((p) => p.startsWith('data/img/')).forEach((p) => {
+      const id = p.slice(9), m = id.match(/^([0-9a-z]{8})[0-9a-f]{16}\./);
+      if (used.has(id) || !m) return;
+      const at = parseInt(m[1], 36);
+      if (!(at > 1.6e12 && Date.now() - at > 10 * 60e3)) return;
+      assets.delete(id).catch(() => {});
+    });
+  }
+
   let ready = null;
   function init() {
     if (!ready) ready = loadAll().then((r) => {
       S.head = r.head; S.sha = r.sha; COLLS.forEach((c) => (S.data[c] = r.data[c])); S.loaded = true;
       setStatus(token() ? 'ready' : 'readonly');
+      if (token()) setTimeout(cleanOrphans, 4000);
     }).catch((e) => { setStatus('error', e.status === 401 ? 'GitHub token 無效' : ('讀不到資料：' + (e.message || e))); throw e; });
     return ready;
   }
@@ -261,21 +275,29 @@
       const path = 'data/img/' + id;
       const bytes = new Uint8Array(await file.arrayBuffer());
       S.localImg[id] = URL.createObjectURL(file);
-      await (S.chain = S.chain.then(async () => {
+      await queue(async () => {
         const r = await gh(repoPath(`/contents/${path}`), { method: 'PUT', body: { message: `journal: add image ${id}`, content: b64FromBytes(bytes), branch: BRANCH } });
         S.sha[path] = r.content.sha; if (r.commit) S.head = r.commit.sha;
-      }));
+      });
       return { id, url: S.localImg[id] };
     },
     async delete(id) {
       const path = 'data/img/' + id;
-      await (S.chain = S.chain.then(async () => {
-        let sha = S.sha[path];
-        if (!sha) { const r = await fetchRemote(path).catch(() => null); sha = r && r.sha; }
-        if (!sha) return;
-        const r = await gh(repoPath(`/contents/${path}`), { method: 'DELETE', body: { message: `journal: delete image ${id}`, sha, branch: BRANCH } });
-        delete S.sha[path]; if (r && r.commit) S.head = r.commit.sha;
-      }));
+      await queue(async () => {
+        for (let attempt = 0; ; attempt++) {
+          let sha = attempt ? null : S.sha[path];
+          if (!sha) { const r = await fetchRemote(path).catch(() => null); sha = r && r.sha; }
+          if (!sha) { delete S.sha[path]; return; }
+          try {
+            const r = await gh(repoPath(`/contents/${path}`), { method: 'DELETE', body: { message: `journal: delete image ${id}`, sha, branch: BRANCH } });
+            delete S.sha[path]; if (r && r.commit) S.head = r.commit.sha;
+            return;
+          } catch (e) {
+            if (attempt >= 3 || !(e.status === 409 || e.status === 422 || e.status === 404)) { console.error('delete image failed', id, e); throw e; }
+            await new Promise((s) => setTimeout(s, 800 * (attempt + 1)));
+          }
+        }
+      });
     },
     url: assetUrl,
   };
