@@ -135,7 +135,7 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .check{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;align-items:start;padding:7px 0;border-top:1px solid var(--grid);cursor:pointer;font-size:14px}
 .check:first-child{border-top:0}
 .check input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--bull);cursor:pointer}
-.check.done span{color:var(--ink-3);text-decoration:line-through}
+.check.done{background:linear-gradient(90deg,rgba(19,137,107,.07),transparent 70%)}
 .check small{display:block;font-size:12px;color:var(--ink-3);text-decoration:none}
 .prog{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
 .plan textarea{width:100%;box-sizing:border-box;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
@@ -892,7 +892,7 @@ const CHECKS=[
 let PRE=null,preChain=Promise.resolve(),preDirty=false;
 function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textContent=t})}
 function savePre(){if(!DB)return;const body={date:TODAY,checks:{...((PRE||{}).checks||{})},plan:String((PRE||{}).plan||''),bias:String((PRE||{}).bias||''),biasNote:String((PRE||{}).biasNote||''),updatedAt:new Date().toISOString()};preSt('儲存中…');preChain=preChain.then(()=>DB.doc('premarket/'+TODAY).set(body)).then(()=>preSt('已儲存')).catch(()=>preSt('儲存失敗，稍後再試'))}
-function applyPre(){const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('biasNote');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v){bn.value=v;grow(bn)}}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=`${n} / ${CHECKS.length} 完成`;const ta=$('prePlan');if(ta&&document.activeElement!==ta){const v=String((PRE&&PRE.plan)||'');if(ta.value!==v){ta.value=v;grow(ta)}}}
+function applyPre(){const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('biasNote');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v){bn.value=v;grow(bn)}}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=n>=CHECKS.length?`${n} / ${CHECKS.length} 全部複習過了`:`${n} / ${CHECKS.length} 已複習`;const ta=$('prePlan');if(ta&&document.activeElement!==ta){const v=String((PRE&&PRE.plan)||'');if(ta.value!==v){ta.value=v;grow(ta)}}}
 function markSize(text,parent){const re=/(艙位|倉位|口數|\d+\s*口)/g;let last=0,m;while((m=re.exec(text))){if(m.index>last)parent.append(document.createTextNode(text.slice(last,m.index)));parent.append(h('mark',null,m[0]));last=m.index+m[0].length}if(last<text.length)parent.append(document.createTextNode(text.slice(last)))}
 function renderPre(){
   const body=$('preBody');
@@ -925,7 +925,7 @@ function renderPre(){
   sp.append(mini);left.append(sp);
   const lz=allLessons();if(lz.length){const pc=h('section','panel box');pc.append(h('h2',null,'注意事項（從圖解筆記整理）'));const ol=h('ol','principles');lz.slice(0,8).forEach(([l,d])=>{const li=h('li',null,l);li.append(h('span','d',d.slice(5).replace('-','/')));ol.append(li)});pc.append(ol);left.append(pc)}
   /* checklist */
-  const ck=h('section','panel box');const ch=h('div');ch.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:baseline';const pg=h('span','prog');pg.id='preProg';ch.append(h('h2',null,'盤前確認清單'),pg);ck.append(ch);
+  const ck=h('section','panel box');const ch=h('div');ch.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:baseline';const pg=h('span','prog');pg.id='preProg';ch.append(h('h2',null,'盤前複習：風控與交易規則'),pg);ck.append(ch);
   const list=h('div','checks');
   CHECKS.forEach(([id,t,s])=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;const sp2=h('span',null,t);sp2.append(h('small',null,s));lb.append(cb,sp2);
     cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});list.append(lb)});
