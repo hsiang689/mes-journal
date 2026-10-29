@@ -122,16 +122,32 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .rule .d{font-size:13px;color:var(--ink-2)}
 .pre-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
 .pre-col{display:grid;gap:16px}
+.pre-duo{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:stretch}
+@media (max-width:900px){.pre-duo{grid-template-columns:minmax(0,1fr)}}
 .pre-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
 .pre-head .date{font-family:var(--f-mono);font-size:13px;color:var(--ink-3)}
 .focus{border-color:var(--warn);background:var(--warn-bg)}
-.focus .big{font-size:18px;font-weight:500;line-height:1.5;margin:0;color:var(--ink)}
+.focus .big{font-size:16px;font-weight:500;line-height:1.5;margin:0;color:var(--ink)}
+/* 三塊黃底統一字級：主要文字 16px、說明 14px（深一點的灰，黃底上比較好讀） */
+.focus p:not(.big){font-size:14px;line-height:1.65;color:var(--ink-2);max-width:none}
+.focus .bias-opt{font-size:14px}
+.focus .bias-opt b{font-size:16px}
+.focus .check{font-size:16px;font-weight:500;color:var(--ink);padding:9px 0}
+.focus .check input{margin-top:4px}
+.focus .check small{font-size:14px;font-weight:400;line-height:1.65;color:var(--ink-2);margin-top:3px}
+.focus .check{border-top-color:rgba(184,112,13,.18)}
 .quote{display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;padding:8px 0;border-top:1px solid var(--grid);font-size:13px}
 .quote:first-of-type{border-top:0}
 .quote .qn{font-family:var(--f-num);font-size:18px;line-height:1.2;color:var(--ink-3)}
 .quote .qt{white-space:pre-wrap;color:var(--ink);min-width:0;overflow-wrap:anywhere}
 .quote mark{background:transparent;color:var(--bear);font-weight:500}
 .checks{display:grid;gap:2px}
+@media (min-width:900px){#chkPanel .checks{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:36px}#chkPanel .check:nth-child(2){border-top:0}}
+.chk-head{display:flex;justify-content:space-between;gap:8px 12px;align-items:baseline;flex-wrap:wrap}
+.chk-acts{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chk-hint{margin:0}
+.chk-edit{width:100%;box-sizing:border-box;min-height:220px;resize:vertical;font:400 14px/1.7 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.chk-edit:focus{outline:2px solid var(--ema);outline-offset:1px}
 .check{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;align-items:start;padding:7px 0;border-top:1px solid var(--grid);cursor:pointer;font-size:14px}
 .check:first-child{border-top:0}
 .check input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--bull);cursor:pointer}
@@ -184,9 +200,9 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .imp .err{color:var(--bear);font-size:13px;margin:0}
 .linkbtn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .bias-opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.bias-opt{display:grid;gap:2px;text-align:left;font:400 13px var(--f-sans);color:var(--ink-2);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.bias-opt{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;text-align:left;font:400 13px var(--f-sans);color:var(--ink-2);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
 .bias-opt b{font:500 18px var(--f-sans);color:var(--ink)}
-.bias-opt.on{border:2px solid var(--warn);padding:9px 11px;background:var(--panel)}
+.bias-opt.on{border:2px solid var(--warn);padding:7px 11px;background:var(--panel)}
 .bias-opt.on b{color:var(--warn)}
 .bias-opt:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 @media (max-width:520px){.bias-opts{grid-template-columns:minmax(0,1fr)}}
@@ -872,7 +888,7 @@ let biasChain=Promise.resolve(),PREALL={};
 function biasCard(){
   const s=h('section','panel box focus bias');const hd=h('div','fig-head');hd.append(h('h2',null,'第一件事：今天的背景判斷'),Object.assign(h('span','prog'),{id:'biasSt'}));s.append(hd);
   s.append(h('p',null,'看完開盤前 3～6 根 K 棒再填。逆著這個判斷的單，必須有 Brooks 的反轉訊號棒，而且只能一口。'));
-  const opts=h('div','bias-opts');[['多頭','偏多：順勢只找買點'],['空頭','偏空：順勢只找賣點'],['區間','區間：只在上下緣反向做']].forEach(([v,d])=>{const b=h('button','bias-opt');b.type='button';b.dataset.v=v;b.disabled=!DB;b.append(h('b',null,v),h('span',null,d));b.addEventListener('click',()=>{PRE={...(PRE||{}),bias:(PRE&&PRE.bias)===v?'':v};applyPre();savePre()});opts.append(b)});s.append(opts);
+  const opts=h('div','bias-opts');[['多頭','順勢只找買點'],['空頭','順勢只找賣點'],['區間','只在上下緣反向做']].forEach(([v,d])=>{const b=h('button','bias-opt');b.type='button';b.dataset.v=v;b.disabled=!DB;b.append(h('b',null,v),h('span',null,d));b.addEventListener('click',()=>{PRE={...(PRE||{}),bias:(PRE&&PRE.bias)===v?'':v};applyPre();savePre()});opts.append(b)});s.append(opts);
   const ta=document.createElement('textarea');ta.id='biasNote';ta.className='cap';ta.rows=1;ta.placeholder='理由：例如「跳空開在昨低下方、EMA 下方，消息面砸下來」';ta.setAttribute('aria-label','背景判斷的理由');ta.disabled=!DB;let tm=null;
   ta.addEventListener('input',()=>{grow(ta);preSt('未儲存');clearTimeout(tm);tm=setTimeout(()=>{PRE={...(PRE||{}),biasNote:ta.value};savePre()},900)});
   ta.addEventListener('blur',()=>{clearTimeout(tm);if(ta.value!==String((PRE||{}).biasNote||'')){PRE={...(PRE||{}),biasNote:ta.value};savePre()}});
@@ -881,29 +897,77 @@ function biasCard(){
 /* pre-market */
 function todayTPE(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}catch(e){return new Date().toISOString().slice(0,10)}}
 const TODAY=todayTPE();
-const CHECKS=[
-  ['send','每筆虧損出場後，先把成交紀錄傳給 Claude','傳資料的這段時間就是離開盤面'],
-  ['early','提前離場，避免保護性止損被打到','一根對你不利的大 K 棒，是出場的好理由；兩根對你不利的中等 K 棒，是出場的合理理由；連續對你不利的小 K 棒，也是出場的合理理由'],
-  ['one','帳面虧損超過 $100 時，只能下一口單','先把虧損打平；打平之前不放大口數'],
-  ['noadd','部位虧損中不加碼','不攤平；要加碼只能加在賺錢的部位'],
-  ['three','連虧 3 筆就離場','照自己的規則，不討價還價'],
-  ['stop','今天虧到 $500 就關平台','碰到就收工，不想辦法凹回來']
-];
+const DEFAULT_CHK_TEXT=`每筆虧損出場後，先把成交紀錄傳給 Claude
+-傳資料的這段時間就是離開盤面
+
+提前離場，避免保護性止損被打到
+-一根對你不利的大 K 棒，是出場的好理由；
+-兩根對你不利的中等 K 棒，是出場的合理理由；
+-連續對你不利的小 K 棒，也是出場的合理理由。
+
+帳面虧損超過 $100 時，只能下一口單
+-先把虧損打平；打平之前不放大口數
+
+部位虧損中不加碼
+-不攤平；要加碼只能加在賺錢的部位
+
+連虧 3 筆就離場
+-照自己的規則，不討價還價
+
+今天虧到 $500 就關平台
+-碰到就收工，不想辦法凹回來`;
+const CHK_LEGACY={'每筆虧損出場後，先把成交紀錄傳給 Claude':'send','提前離場，避免保護性止損被打到':'early','帳面虧損超過 $100 時，只能下一口單':'one','部位虧損中不加碼':'noadd','連虧 3 筆就離場':'three','今天虧到 $500 就關平台':'stop'};
+const CHK_PER=6;
+function chkId(s){if(CHK_LEGACY[s])return CHK_LEGACY[s];let x=5381;for(const ch of s)x=((x<<5)+x+ch.codePointAt(0))|0;return 'r'+(x>>>0).toString(36)}
+function parseChecks(txt){const out=[],seen={};String(txt||'').split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s)return;
+  if(/^[-－–]/.test(s)){const d=s.replace(/^[-－–]\s*/,'');if(out.length&&d)out[out.length-1][2].push(d);return}
+  let id=chkId(s);if(seen[id]){let k=2;while(seen[id+'-'+k])k++;id=id+'-'+k}seen[id]=1;out.push([id,s,[]])});return out}
+let CHECKS=parseChecks(DEFAULT_CHK_TEXT),CHKTXT=null,CHKPAGE=0,CHKEDIT=null;
 let PRE=null,preChain=Promise.resolve(),preDirty=false;
 function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textContent=t})}
 function savePre(){if(!DB)return;const body={date:TODAY,checks:{...((PRE||{}).checks||{})},plan:String((PRE||{}).plan||''),bias:String((PRE||{}).bias||''),biasNote:String((PRE||{}).biasNote||''),updatedAt:new Date().toISOString()};preSt('儲存中…');preChain=preChain.then(()=>DB.doc('premarket/'+TODAY).set(body)).then(()=>preSt('已儲存')).catch(()=>preSt('儲存失敗，稍後再試'))}
 function applyPre(){const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('biasNote');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v){bn.value=v;grow(bn)}}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=n>=CHECKS.length?`${n} / ${CHECKS.length} 全部複習過了`:`${n} / ${CHECKS.length} 已複習`;const ta=$('prePlan');if(ta&&document.activeElement!==ta){const v=String((PRE&&PRE.plan)||'');if(ta.value!==v){ta.value=v;grow(ta)}}}
 function markSize(text,parent){const re=/(艙位|倉位|口數|\d+\s*口)/g;let last=0,m;while((m=re.exec(text))){if(m.index>last)parent.append(document.createTextNode(text.slice(last,m.index)));parent.append(h('mark',null,m[0]));last=m.index+m[0].length}if(last<text.length)parent.append(document.createTextNode(text.slice(last)))}
+function fillChecks(ck){
+  ck.replaceChildren();
+  const ch=h('div','chk-head');const pg=h('span','prog');pg.id='preProg';const acts=h('div','chk-acts');
+  ch.append(h('h2',null,'盤前複習：風控與交易規則'),acts);ck.append(ch);
+  if(CHKEDIT!==null){
+    const ta=document.createElement('textarea');ta.id='chkEdit';ta.className='chk-edit';ta.value=CHKEDIT;ta.spellcheck=false;ta.setAttribute('aria-label','編輯規則');
+    const msg=h('span','sub');msg.setAttribute('role','status');
+    const save=async()=>{const txt=ta.value.replace(/\s+$/,'');const rules=parseChecks(txt);if(!rules.length){msg.textContent='至少要有一條規則';return}
+      if(!DB){msg.textContent='這個檢視不能儲存';return}msg.textContent='儲存中…';sv.disabled=true;
+      try{await DB.doc('handbook/checklist').set({text:txt,updatedAt:new Date().toISOString()});CHKTXT=txt;CHECKS=rules;CHKEDIT=null;CHKPAGE=0;fillChecks($('chkPanel')||ck);applyPre()}
+      catch(e){msg.textContent='儲存失敗，稍後再試';sv.disabled=false}};
+    ta.addEventListener('input',()=>{CHKEDIT=ta.value;grow(ta)});
+    ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();save()}else if(e.key==='Escape'){e.preventDefault();CHKEDIT=null;fillChecks(ck);applyPre()}});
+    const cancel=h('button','linkbtn','取消');cancel.type='button';cancel.addEventListener('click',()=>{CHKEDIT=null;fillChecks(ck);applyPre()});
+    const sv=h('button','linkbtn','儲存');sv.type='button';sv.style.fontWeight='600';sv.addEventListener('click',save);
+    acts.append(cancel,sv);
+    ck.append(h('p','sub chk-hint','一行一條規則；用「-」開頭的行是上一條規則的說明，可以有好幾行。空行只是方便閱讀。Ctrl＋Enter 儲存，Esc 取消。'),ta,msg);
+    requestAnimationFrame(()=>{grow(ta);ta.focus()});return}
+  const pages=Math.max(1,Math.ceil(CHECKS.length/CHK_PER));CHKPAGE=Math.min(Math.max(0,CHKPAGE),pages-1);
+  acts.append(pg);
+  if(pages>1){const nav=h('span','fnav');const pv=h('button','linkbtn','←');pv.type='button';pv.setAttribute('aria-label','上一頁');pv.disabled=CHKPAGE===0;pv.addEventListener('click',()=>{CHKPAGE--;fillChecks(ck);applyPre()});
+    const nx=h('button','linkbtn','→');nx.type='button';nx.setAttribute('aria-label','下一頁');nx.disabled=CHKPAGE>=pages-1;nx.addEventListener('click',()=>{CHKPAGE++;fillChecks(ck);applyPre()});
+    nav.append(pv,h('span','prog',`第 ${CHKPAGE+1} / ${pages} 頁`),nx);acts.append(nav)}
+  if(DB){const ed=h('button','linkbtn','編輯');ed.type='button';ed.addEventListener('click',()=>{CHKEDIT=CHKTXT||DEFAULT_CHK_TEXT;fillChecks(ck)});acts.append(ed)}
+  const list=h('div','checks');
+  CHECKS.slice(CHKPAGE*CHK_PER,(CHKPAGE+1)*CHK_PER).forEach(([id,tt,ds],k)=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;
+    const sp2=h('span',null,tt);ds.forEach(d=>sp2.append(h('small',null,d)));lb.append(cb,sp2);
+    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});list.append(lb)});
+  ck.append(list);
+}
 function renderPre(){
   const body=$('preBody');
-  if(document.activeElement&&['prePlan','biasNote'].includes(document.activeElement.id)){preDirty=true;return}
+  if(document.activeElement&&['prePlan','biasNote','chkEdit'].includes(document.activeElement.id)){preDirty=true;return}
   preDirty=false;body.replaceChildren();
   const wrap=h('div');wrap.style.cssText='display:grid;gap:16px';
   const wd=['日','一','二','三','四','五','六'][new Date(TODAY+'T12:00:00').getDay()];
   const head=h('div','pre-head');head.append(h('h3',null,'開盤前看一遍，再打開下單面板'),h('span','date',`${TODAY.replace(/-/g,'/')}（${wd}）`));wrap.append(head);
-  wrap.append(biasCard());
+  const duo=h('div','pre-duo');duo.append(biasCard());wrap.append(duo);
   const ds=Object.values(DAYS).sort((a,b)=>a.date<b.date?1:-1),last=ds[0];
-  const grid=h('div','pre-grid'),left=h('div','pre-col'),right=h('div','pre-col');grid.append(left,right);wrap.append(grid);
+  const top=h('div','pre-col'),grid=h('div','pre-grid'),left=h('div','pre-col'),right=h('div','pre-col');grid.append(left,right);wrap.append(top,grid);
   /* focus card from last day */
   const fc=h('section','panel box focus');fc.append(h('h2',null,'今天最重要的一件事'));
   if(last){
@@ -912,12 +976,12 @@ function renderPre(){
     const msg=sizeHits?`控制口數。上個交易日你在 ${sizeHits} 筆檢討裡寫到倉位太大，最大同時持倉 ${st.maxLots||'?'} 口。`:(st.maxLots>1?`控制口數。上個交易日最大同時持倉 ${st.maxLots} 口。`:'照計畫交易，守住規則。');
     fc.append(h('p','big',msg));
     if(st.ruleTime)fc.append(h('p',null,`上個交易日 ${st.ruleTime} 就觸發規則（${st.ruleText||''}），之後還做了 ${st.afterStop||0} 個部位。`));
-    left.append(fc);
+    duo.append(fc);
     const rv=h('section','panel box');const rh=h('div');rh.style.cssText='display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap';rh.append(h('h2',null,`你在 ${last.label||last.date} 寫的檢討`));
     const go=h('button','linkbtn','看當天圖');go.type='button';go.addEventListener('click',()=>{CUR=last.date;$('daySel').value=CUR;renderDay();showTab('tab-day');scrollTo(0,0)});rh.append(go);rv.append(rh);
     if(!quotes.length)rv.append(h('p',null,'那天還沒寫檢討。'));
     const ql=h('div');quotes.forEach(([n,t])=>{const q=h('div','quote');q.append(h('span','qn','#'+n));const qt=h('span','qt');markSize(t,qt);q.append(qt);ql.append(q)});rv.append(ql);left.append(rv);
-  }else{fc.append(h('p','big','還沒有交易日資料。收盤後把成交紀錄貼給 Claude，這裡就會出現上個交易日的重點。'));left.append(fc)}
+  }else{fc.append(h('p','big','還沒有交易日資料。收盤後把成交紀錄貼給 Claude，這裡就會出現上個交易日的重點。'));duo.append(fc)}
   /* setups */
   const sp=h('section','panel box');sp.append(h('h2',null,'今天要找的型態'));const mini=h('div','mini');
   if(!CASES.length)mini.append(h('p',null,'手冊裡還沒有案例。'));
@@ -925,11 +989,7 @@ function renderPre(){
   sp.append(mini);left.append(sp);
   const lz=allLessons();if(lz.length){const pc=h('section','panel box');pc.append(h('h2',null,'注意事項（從圖解筆記整理）'));const ol=h('ol','principles');lz.slice(0,8).forEach(([l,d])=>{const li=h('li',null,l);li.append(h('span','d',d.slice(5).replace('-','/')));ol.append(li)});pc.append(ol);left.append(pc)}
   /* checklist */
-  const ck=h('section','panel box');const ch=h('div');ch.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:baseline';const pg=h('span','prog');pg.id='preProg';ch.append(h('h2',null,'盤前複習：風控與交易規則'),pg);ck.append(ch);
-  const list=h('div','checks');
-  CHECKS.forEach(([id,t,s])=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;const sp2=h('span',null,t);sp2.append(h('small',null,s));lb.append(cb,sp2);
-    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});list.append(lb)});
-  ck.append(list);right.append(ck);
+  const ck=h('section','panel box focus');ck.id='chkPanel';fillChecks(ck);top.append(ck);
   /* plan */
   const pl=h('section','panel box plan');const ph=h('div');ph.style.cssText='display:flex;justify-content:space-between;gap:10px;align-items:baseline';const ps=h('span','prog');ps.id='preSt';ph.append(h('h2',null,'今日計畫'),ps);
   const ta=document.createElement('textarea');ta.id='prePlan';ta.rows=3;ta.placeholder='今天的關鍵價位、要等的型態、最多做幾筆…';ta.setAttribute('aria-label','今日計畫');ta.disabled=!DB;let tmr=null;
@@ -974,6 +1034,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   db.collection('days').onSnapshot(q=>{const prevCur=CUR,prevDoc=DAYS[CUR];DAYS={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)DAYS[v.date]=v});fillSelect();daysReady=true;
     if(CUR!==prevCur||DAYS[CUR]!==prevDoc)renderDay();renderOver();renderBook();renderPre();if(CHARTS.length)fillCharts()},()=>{});
   db.collection('reviews').onSnapshot(q=>{REV={};q.docs.forEach(d=>{REV[d.id]=d.data()});applyReviews();if(daysReady){renderOver();renderPre()}},()=>{});
+  db.doc('handbook/checklist').onSnapshot(s=>{const d=s.exists&&s.data();CHKTXT=(d&&d.text)||null;CHECKS=parseChecks(CHKTXT||DEFAULT_CHK_TEXT);const p=$('chkPanel');if(p&&CHKEDIT===null){fillChecks(p);applyPre()}},()=>{});
   db.doc('handbook/rules').onSnapshot(s=>{RULES=s.exists?s.data():null;renderBook();renderPre()},()=>{});
   db.collection('cases').onSnapshot(q=>{CASES=q.docs.map(d=>d.data());renderBook();renderPre()},()=>{});
   db.collection('charts').onSnapshot(q=>{CHARTS=q.docs.map(d=>({id:d.id,...d.data()}));fillCharts();renderBook();renderPre()},()=>{});
