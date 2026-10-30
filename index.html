@@ -142,8 +142,16 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .quote .qt{white-space:pre-wrap;color:var(--ink);min-width:0;overflow-wrap:anywhere}
 .quote mark{background:transparent;color:var(--bear);font-weight:500}
 .checks{display:grid;gap:2px}
-@media (min-width:900px){#chkPanel .checks{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:36px}#chkPanel .check:nth-child(2){border-top:0}}
-.chk-head{display:flex;justify-content:space-between;gap:8px 12px;align-items:baseline;flex-wrap:wrap}
+.chk-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
+.chk-col{background:rgba(255,255,255,.55);border:1px solid rgba(184,112,13,.2);border-radius:10px;padding:2px 14px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chk-col{background:rgba(255,255,255,.035)}}
+:root[data-theme="dark"] .chk-col{background:rgba(255,255,255,.035)}
+@media (max-width:900px){.chk-cols{grid-template-columns:minmax(0,1fr)}}
+.chk-head{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px 12px;align-items:center}
+.chk-head h2{justify-self:start}
+.chk-mid{display:flex;gap:14px;align-items:center;justify-content:center}
+.chk-head .chk-acts{justify-self:end}
+@media (max-width:640px){.chk-head{grid-template-columns:minmax(0,1fr) auto}.chk-mid{grid-column:1/-1;grid-row:2;justify-content:flex-start}}
 .chk-acts{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .chk-hint{margin:0}
 .chk-edit{width:100%;box-sizing:border-box;min-height:220px;resize:vertical;font:400 14px/1.7 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
@@ -917,7 +925,7 @@ const DEFAULT_CHK_TEXT=`每筆虧損出場後，先把成交紀錄傳給 Claude
 今天虧到 $500 就關平台
 -碰到就收工，不想辦法凹回來`;
 const CHK_LEGACY={'每筆虧損出場後，先把成交紀錄傳給 Claude':'send','提前離場，避免保護性止損被打到':'early','帳面虧損超過 $100 時，只能下一口單':'one','部位虧損中不加碼':'noadd','連虧 3 筆就離場':'three','今天虧到 $500 就關平台':'stop'};
-const CHK_PER=6;
+const CHK_PER=9,CHK_GROUP=3;
 function chkId(s){if(CHK_LEGACY[s])return CHK_LEGACY[s];let x=5381;for(const ch of s)x=((x<<5)+x+ch.codePointAt(0))|0;return 'r'+(x>>>0).toString(36)}
 function parseChecks(txt){const out=[],seen={};String(txt||'').split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s)return;
   if(/^[-－–]/.test(s)){const d=s.replace(/^[-－–]\s*/,'');if(out.length&&d)out[out.length-1][2].push(d);return}
@@ -930,8 +938,8 @@ function applyPre(){const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bia
 function markSize(text,parent){const re=/(艙位|倉位|口數|\d+\s*口)/g;let last=0,m;while((m=re.exec(text))){if(m.index>last)parent.append(document.createTextNode(text.slice(last,m.index)));parent.append(h('mark',null,m[0]));last=m.index+m[0].length}if(last<text.length)parent.append(document.createTextNode(text.slice(last)))}
 function fillChecks(ck){
   ck.replaceChildren();
-  const ch=h('div','chk-head');const pg=h('span','prog');pg.id='preProg';const acts=h('div','chk-acts');
-  ch.append(h('h2',null,'盤前複習：風控與交易規則'),acts);ck.append(ch);
+  const ch=h('div','chk-head');const pg=h('span','prog');pg.id='preProg';const mid=h('div','chk-mid');const acts=h('div','chk-acts');
+  ch.append(h('h2',null,'盤前複習：風控與交易規則'),mid,acts);ck.append(ch);
   if(CHKEDIT!==null){
     const ta=document.createElement('textarea');ta.id='chkEdit';ta.className='chk-edit';ta.value=CHKEDIT;ta.spellcheck=false;ta.setAttribute('aria-label','編輯規則');
     const msg=h('span','sub');msg.setAttribute('role','status');
@@ -947,15 +955,16 @@ function fillChecks(ck){
     ck.append(h('p','sub chk-hint','一行一條規則；用「-」開頭的行是上一條規則的說明，可以有好幾行。空行只是方便閱讀。Ctrl＋Enter 儲存，Esc 取消。'),ta,msg);
     requestAnimationFrame(()=>{grow(ta);ta.focus()});return}
   const pages=Math.max(1,Math.ceil(CHECKS.length/CHK_PER));CHKPAGE=Math.min(Math.max(0,CHKPAGE),pages-1);
-  acts.append(pg);
+  mid.append(pg);
   if(pages>1){const nav=h('span','fnav');const pv=h('button','linkbtn','←');pv.type='button';pv.setAttribute('aria-label','上一頁');pv.disabled=CHKPAGE===0;pv.addEventListener('click',()=>{CHKPAGE--;fillChecks(ck);applyPre()});
     const nx=h('button','linkbtn','→');nx.type='button';nx.setAttribute('aria-label','下一頁');nx.disabled=CHKPAGE>=pages-1;nx.addEventListener('click',()=>{CHKPAGE++;fillChecks(ck);applyPre()});
-    nav.append(pv,h('span','prog',`第 ${CHKPAGE+1} / ${pages} 頁`),nx);acts.append(nav)}
+    nav.append(pv,h('span','prog',`第 ${CHKPAGE+1} / ${pages} 頁`),nx);mid.append(nav)}
   if(DB){const ed=h('button','linkbtn','編輯');ed.type='button';ed.addEventListener('click',()=>{CHKEDIT=CHKTXT||DEFAULT_CHK_TEXT;fillChecks(ck)});acts.append(ed)}
-  const list=h('div','checks');
-  CHECKS.slice(CHKPAGE*CHK_PER,(CHKPAGE+1)*CHK_PER).forEach(([id,tt,ds],k)=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;
+  const list=h('div','chk-cols');const items=CHECKS.slice(CHKPAGE*CHK_PER,(CHKPAGE+1)*CHK_PER);
+  for(let g=0;g<items.length;g+=CHK_GROUP){const col=h('div','checks chk-col');list.append(col);
+  items.slice(g,g+CHK_GROUP).forEach(([id,tt,ds],k)=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;
     const sp2=h('span',null,tt);ds.forEach(d=>sp2.append(h('small',null,d)));lb.append(cb,sp2);
-    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});list.append(lb)});
+    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});col.append(lb)})}
   ck.append(list);
 }
 function renderPre(){
