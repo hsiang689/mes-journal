@@ -306,7 +306,7 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
     <div id="bookBody"><div class="panel empty">正在讀取交易手冊。</div></div>
   </section>
 
-  <p class="note">K 線為 Yahoo 的 MES 連續合約 5 分鐘資料，EMA 為 20 根指數移動平均，和平台數值可能差幾毛。這是交易紀錄與複盤，不是交易建議。</p>
+  <p class="note">K 線為 Databento（CME 原始資料）的 MES 連續合約，1 分 K 合成 5 分 K，EMA 為 20 根指數移動平均，和平台數值可能差幾毛。這是交易紀錄與複盤，不是交易建議。</p>
 </div>
 
 <dialog class="set" id="setDlg" aria-labelledby="setTitle">
@@ -786,7 +786,7 @@ let MCP=null;const BARST={},BUSY={};
 function barSt(date,t){BARST[date]=t;const e=$('barSt');if(e&&CUR===date)e.textContent=t}
 function barsPlaceholder(day){
   const w=h('div','empty');w.style.cssText='display:grid;gap:8px;justify-items:center';
-  w.append(h('p',null,`${day.label||CUR} 的 K 線還沒補上。部位檢討和統計已經可以用。`),h('p','sub',`收盤後 GitHub Actions 會自動抓 Yahoo 的 5 分 K 補上，通常幾分鐘內，頁面會自己更新。很久都沒出現的話，到 mes-journal-data 的 Actions 手動執行「補 K 線」。`));
+  w.append(h('p',null,`${day.label||CUR} 的 K 線還沒補上。部位檢討和統計已經可以用。`),h('p','sub',`收盤後 GitHub Actions 會自動從 Databento 抓 K 線補上，通常幾分鐘內，頁面會自己更新。很久都沒出現的話，到 mes-journal-data 的 Actions 手動執行「補 K 線」。`));
   return w}
 function resText(r){if(r==null)return'';if(typeof r==='string')return r;if(typeof r.payload==='string')return r.payload;const c=(r.content||[]).map(b=>b&&b.text||'').join('\n');return c||(r.payload!=null?JSON.stringify(r.payload):'')}
 function pickJson(txt){const i=txt.indexOf('{"chart"');if(i<0)return null;for(let j=txt.lastIndexOf('}');j>i;j=txt.lastIndexOf('}',j-1)){try{return JSON.parse(txt.slice(i,j+1))}catch(e){}}return null}
