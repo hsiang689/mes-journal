@@ -1202,6 +1202,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
 
   /* ---------- 人物 ---------- */
   const duckSvg=()=>{const s=document.querySelector('#tab-coach svg');return s?s.cloneNode(true):el('span',null,'鴨')};
+  const ORDER=['bull','bear','duck','ctr']; // 顯示、朗讀的順序：多方、空方、客觀、反方
   const WHO={duck:{name:'客觀'},bull:{name:'多方',av:'多'},bear:{name:'空方',av:'空'},ctr:{name:'反方',av:'反'}};
   function avatar(k){const a=el('span','cx-av '+k);if(k==='duck'){const s=duckSvg();s.removeAttribute('class');a.append(s)}else a.textContent=WHO[k].av;return a}
 
@@ -1211,7 +1212,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   const side=el('section','panel box cx-side');const hisH=el('h2',null,'今天的討論');const hl=el('div','cx-hist');side.append(hisH,hl);
   const main=el('section','panel cx-main');
   const head=el('div','cx-head');
-  const who=el('div','cx-who');['duck','bull','bear','ctr'].forEach(k=>{const s=el('span','cx-wh');s.append(avatar(k),el('span',null,WHO[k].name+(WHO[k].tag?'（'+WHO[k].tag+'）':'')));who.append(s)});
+  const who=el('div','cx-who');ORDER.forEach(k=>{const s=el('span','cx-wh');s.append(avatar(k),el('span',null,WHO[k].name+(WHO[k].tag?'（'+WHO[k].tag+'）':'')));who.append(s)});
   // 朗讀回覆（瀏覽器內建語音，免費）：開關記在這台瀏覽器；每位用不同聲音或音高
   const TTS=window.speechSynthesis||null;let ttsOn=false;try{ttsOn=localStorage.getItem('mj-tts')==='1'}catch(e){}
   const ttsBtn=el('button','linkbtn cx-tts');ttsBtn.type='button';
@@ -1238,7 +1239,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   function fillV(){
     const all=(TTS.getVoices()||[]).filter(v=>/^zh/i.test(v.lang)&&!/HK|yue/i.test(v.lang)).sort((a,b)=>(/TW|Hant/i.test(b.lang)-/TW|Hant/i.test(a.lang))||a.name.localeCompare(b.name));
     const box=el('div','cx-vbox');box.append(el('h2',null,'朗讀的聲音'));
-    ['duck','bull','bear','ctr'].forEach(k=>{const row=el('div','cx-vrow');const nm=el('span','cx-wh');nm.append(avatar(k),el('span',null,WHO[k].name));
+    ORDER.forEach(k=>{const row=el('div','cx-vrow');const nm=el('span','cx-wh');nm.append(avatar(k),el('span',null,WHO[k].name));
       const sel=el('select');sel.setAttribute('aria-label',WHO[k].name+'的聲音');const pa=pickVoice(k).v;const auto=el('option',null,'預設：'+(pa?vTag(pa):'預設'));auto.value='';sel.append(auto);
       all.forEach(v=>{const o=el('option',null,vTag(v));o.value=v.voiceURI;sel.append(o)});
       sel.value=all.some(v=>v.voiceURI===VSEL[k])?VSEL[k]:'';
@@ -1390,7 +1391,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
           else if(CUR.id)n.push(el('p','cx-sub','（這段討論沒有存截圖）'))}
         if(pic&&/^（只貼了圖）/.test(m.t))return;
         if(m.to)n.push(el('span','cx-to','只問 '+WHO[m.to].name));n.push(m.t);const b=bubble('me',n);b.querySelector('.cx-bub').append(el('span','cx-time',tpe(Date.parse(m.at))));return}
-      if(m.r==='a'){['duck','bull','bear','ctr'].forEach(k=>{
+      if(m.r==='a'){ORDER.forEach(k=>{
           if(m.wait&&m.wait[k]){bubble(k,[el('p','cx-sub',IMG?'看圖中…':'想一下…')]).classList.add('wait');return}
           if(k==='ctr'){const c=m.ctr;if(!c||(!c.say&&!c.stop&&!(c.warn||[]).length))return;const n=[];if(c.stop)n.push(el('p','cx-warn','⚠️ '+c.stop));if(c.say)n.push(c.say);
             if((c.warn||[]).length){const ul=el('ul','cx-wl');c.warn.forEach(w=>ul.append(el('li','cx-warn','⚠️ '+w)));n.push(ul)}bubble('ctr',n,m.at,sayText('ctr',m));return}
@@ -1425,10 +1426,12 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     const th=CUR,up=IMG&&ASSETS&&!th.imgId&&th.local&&th.local===IMGURL?ASSETS.upload(IMG).then(r=>{th.imgId=r.id},()=>{st.textContent='截圖沒有存成功，討論照常'}):null;
     // 用名字開頭（「空方 …」「客觀，…」「多方你…」）就只問那一位
     const mm=t.match(/^\s*[@＠]?(客觀|小黃鴨|多方|空方|反方)(?:[\s,，:：、]+|(?=你))/);
-    const to=mm?{客觀:'duck',小黃鴨:'duck',多方:'bull',空方:'bear',反方:'ctr'}[mm[1]]:null,keys=to?[to]:['duck','bull','bear','ctr'];
+    const to=mm?{客觀:'duck',小黃鴨:'duck',多方:'bull',空方:'bear',反方:'ctr'}[mm[1]]:null,keys=to?[to]:ORDER;
     const u={r:'u',t:t||'（只貼了圖）請先說說你們看到的盤勢。',at:iso()};if(to)u.to=to;CUR.msgs.push(u);
     const a={r:'a',duck:'',bull:'',bear:'',ctr:null,at:null,wait:Object.fromEntries(keys.map(k=>[k,1]))};
-    const ps=keys.map(k=>ask(k).then(v=>{a[k]=v;if(ttsOn){const s=sayText(k,a);if(s)speak(k,WHO[k].name+'。'+s)}return null},e=>e||{code:'x'}).then(r=>{delete a.wait[k];draw();return r}));
+    // 誰先回就先顯示，朗讀則照順序念（前一位還沒回就等）
+    let next=0;const flush=()=>{while(next<keys.length&&!(a.wait&&a.wait[keys[next]])){const k=keys[next++];if(ttsOn){const s=sayText(k,a);if(s)speak(k,WHO[k].name+'。'+s)}}};
+    const ps=keys.map(k=>ask(k).then(v=>{a[k]=v;return null},e=>e||{code:'x'}).then(r=>{delete a.wait[k];draw();flush();return r}));
     CUR.msgs.push(a);draw();
     const errs=(await Promise.all(ps)).filter(Boolean);if(up)await up;
     delete a.wait;a.at=iso();
