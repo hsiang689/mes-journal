@@ -265,6 +265,33 @@ dialog.set input{font:400 14px var(--f-mono);color:var(--ink);background:var(--b
 dialog.set .hint{font-size:12px;color:var(--ink-3);line-height:1.6;margin:0}
 dialog.set .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
+/* ===== 盤中反方（cx-）===== */
+.cx-wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.cx-wrap{grid-template-columns:minmax(0,1fr)}}
+.cx-box{display:grid;gap:12px}
+.cx-drop{border:1.5px dashed var(--line);border-radius:8px;min-height:120px;display:grid;place-items:center;color:var(--ink-3);font-size:14px;text-align:center;padding:10px;cursor:text;outline:none;caret-color:transparent;overflow:hidden}
+.cx-drop:focus,.cx-drop.over{border-color:var(--warn);background:var(--warn-bg)}
+.cx-drop img{max-width:100%;max-height:340px;display:block;border-radius:6px}
+.cx-text{width:100%;box-sizing:border-box;min-height:96px;resize:vertical;font:400 15px/1.7 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.cx-text:focus{outline:2px solid var(--ema);outline-offset:1px}
+.cx-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cx-mic.on{background:var(--bear);border-color:var(--bear);color:#fff}
+.cx-send{font-weight:600}
+.cx-st{font-size:13px;color:var(--ink-3)}
+.cx-reply h3{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--ink-3)}
+.cx-reply ol,.cx-reply ul{margin:0;padding-left:20px;display:grid;gap:4px;font-size:15px;line-height:1.6}
+.cx-reply p{margin:0;font-size:15px;line-height:1.6;color:var(--ink)}
+.cx-sec{display:grid;gap:4px;padding:10px 0;border-top:1px solid var(--grid)}
+.cx-sec:first-child{border-top:0;padding-top:0}
+.cx-warn{color:var(--bear);font-weight:500}
+.cx-ok{color:var(--ink-2)}
+.cx-hist{display:grid;gap:0}
+.cx-item{padding:10px 0;border-top:1px solid var(--grid);display:grid;gap:4px;cursor:pointer}
+.cx-item:first-child{border-top:0}
+.cx-item:hover{background:var(--warn-bg)}
+.cx-item .cx-t{font:500 12px var(--f-mono);color:var(--ink-3)}
+.cx-item .cx-r{font-size:14px;color:var(--ink)}
+.cx-item .cx-w{font-size:13px;color:var(--bear)}
 </style>
 </head>
 <body>
@@ -274,6 +301,7 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
     <h1>MES 交易日誌</h1>
     <div class="tabs" role="tablist" aria-label="日誌分頁">
       <button role="tab" id="tab-pre" aria-selected="false" aria-controls="view-pre">盤前提醒</button>
+      <button role="tab" id="tab-coach" aria-selected="false" aria-controls="view-coach">盤中反方</button>
       <button role="tab" id="tab-day" aria-selected="true" aria-controls="view-day">每日檢討</button>
       <button role="tab" id="tab-notes" aria-selected="false" aria-controls="view-notes">圖解筆記</button>
       <button role="tab" id="tab-over" aria-selected="false" aria-controls="view-over">趨勢總覽</button>
@@ -284,6 +312,10 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
 
   <section id="view-pre" role="tabpanel" aria-labelledby="tab-pre" hidden style="gap:16px">
     <div id="preBody"><div class="panel empty">正在讀取日誌資料。</div></div>
+  </section>
+
+  <section id="view-coach" role="tabpanel" aria-labelledby="tab-coach" hidden style="gap:16px">
+    <div id="coachBody"></div>
   </section>
 
   <section id="view-day" role="tabpanel" aria-labelledby="tab-day" style="display:grid;gap:16px">
@@ -369,7 +401,7 @@ let showPrev=true;try{showPrev=localStorage.getItem('journal-prev')!=='0'}catch(
 let DB=null,DAYS={},CUR=null,REV={},RULES=null,CASES=[],MEMO={},showAll=false,active=null,groups=[];
 
 /* tabs */
-const TABS=[['tab-pre','view-pre'],['tab-day','view-day'],['tab-notes','view-notes'],['tab-over','view-over'],['tab-book','view-book']];
+const TABS=[['tab-pre','view-pre'],['tab-coach','view-coach'],['tab-day','view-day'],['tab-notes','view-notes'],['tab-over','view-over'],['tab-book','view-book']];
 function showTab(id){TABS.forEach(([t,v])=>{const on=t===id;$(t).setAttribute('aria-selected',on);$(v).hidden=!on;if(on){$(v).style.display='grid';$(v).querySelectorAll('textarea').forEach(grow)}});try{localStorage.setItem('journal-tab',id)}catch(e){}}
 TABS.forEach(([t])=>$(t).addEventListener('click',()=>showTab(t)));
 try{const t=localStorage.getItem('journal-tab');if(t&&$(t))showTab(t)}catch(e){}
@@ -1057,5 +1089,133 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   db.collection('premarket').onSnapshot(q=>{PREALL={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)PREALL[v.date]=v});if(!(q.metadata&&q.metadata.hasPendingWrites)){PRE=PREALL[TODAY]||null;applyPre()}if(DAYS[CUR]&&!document.activeElement?.closest?.('#dayBody'))renderDay()},()=>{});
 })();
 </script>
+<script>
+/* ===== 盤中反方：獨立模組 =====
+   移除方式：刪掉這段 <script>、#view-coach 區塊、#tab-coach 按鈕、TABS 裡的 ['tab-coach','view-coach']、.cx- 開頭的樣式。
+   資料存在 db 的 coach 集合（只存文字：你說的理由＋Claude 的回覆）；截圖只送給 Claude，不保留。 */
+(()=>{
+  const $=id=>document.getElementById(id);
+  const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+  let DB=null,AI=null,IMG=null,IMGURL='',LOG={},RULES='',PRE={},busy=false,last=null;
+  const ETF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'});
+  function sessionDate(){const o={};ETF.formatToParts(new Date()).forEach(x=>o[x.type]=x.value);let d=Date.UTC(+o.year,+o.month-1,+o.day);if((+o.hour%24)>=18)d+=864e5;while([0,6].includes(new Date(d).getUTCDay()))d+=864e5;return new Date(d).toISOString().slice(0,10)}
+  const tpe=ms=>new Date(ms).toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',hour12:false});
+
+  /* ---------- 畫面 ---------- */
+  const body=$('coachBody');
+  const wrap=el('div','cx-wrap');
+  const left=el('section','panel box cx-box');
+  left.append(el('h2',null,'說出你想做的單'));
+  const drop=el('div','cx-drop');drop.contentEditable='true';drop.setAttribute('role','textbox');drop.setAttribute('aria-label','貼上截圖');drop.tabIndex=0;
+  const ph=()=>{drop.replaceChildren(el('span',null,'點這裡按 Ctrl+V 貼上 TopstepX 截圖（Win+Shift+S 截圖）；也可以拖進來。圖片只送給 Claude，不會保留。'))};ph();
+  const ta=el('textarea','cx-text');ta.id='cxText';ta.placeholder='例如：想在這裡做多，理由是回測 EMA 出現多頭訊號棒，前面是兩段式回調。（按 🎤 說話，或 Win+H 語音輸入）';
+  const row=el('div','cx-row');
+  const mic=el('button','linkbtn cx-mic','🎤 說話');mic.type='button';
+  const send=el('button','linkbtn cx-send','送出給反方');send.type='button';
+  const clr=el('button','linkbtn','清除');clr.type='button';
+  const st=el('span','cx-st');st.setAttribute('role','status');
+  row.append(mic,send,clr,st);
+  left.append(drop,ta,row,el('p','sub','Ctrl+Enter 送出。Claude 只扮演反方：提出反方向的理由、檢查規則，不會告訴你該不該下單。'));
+  const right=el('div','cx-box');
+  const rep=el('section','panel box cx-reply');rep.append(el('h2',null,'反方的看法'),el('p','sub','送出後會顯示在這裡。'));
+  const his=el('section','panel box');const hisH=el('h2',null,'今天的對話紀錄');const hl=el('div','cx-hist');his.append(hisH,hl);
+  right.append(rep,his);wrap.append(left,right);body.replaceChildren(wrap);
+
+  /* ---------- 截圖 ---------- */
+  function setImg(file){if(!file||!/^image\//.test(file.type))return;IMG=file;if(IMGURL)URL.revokeObjectURL(IMGURL);IMGURL=URL.createObjectURL(file);const im=el('img');im.src=IMGURL;im.alt='截圖預覽';drop.replaceChildren(im);st.textContent=''}
+  function clearImg(){IMG=null;if(IMGURL)URL.revokeObjectURL(IMGURL);IMGURL='';ph()}
+  drop.addEventListener('beforeinput',e=>e.preventDefault());
+  drop.addEventListener('keydown',e=>{if(e.key==='Tab'||e.ctrlKey||e.metaKey)return;e.preventDefault()});
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
+  drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');setImg([...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('image/')))});
+  document.addEventListener('paste',e=>{if($('view-coach').hidden)return;const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(!it)return;e.preventDefault();setImg(it.getAsFile())});
+
+  /* ---------- 語音（瀏覽器內建，免費） ---------- */
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,base='';
+  if(!SR){mic.disabled=true;mic.title='這個瀏覽器不支援語音辨識，請用 Win+H';}
+  mic.addEventListener('click',()=>{
+    if(rec){rec.stop();return}
+    try{rec=new SR()}catch(e){st.textContent='語音辨識無法啟動，請改用 Win+H';return}
+    rec.lang='zh-TW';rec.continuous=true;rec.interimResults=true;base=ta.value?ta.value.replace(/\s*$/,'')+' ':'';
+    rec.onresult=e=>{let fin='',tmp='';for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];(r.isFinal?(x=>fin+=x):(x=>tmp+=x))(r[0].transcript)}if(fin)base+=fin;ta.value=base+tmp};
+    rec.onerror=e=>{st.textContent=({'not-allowed':'瀏覽器不允許使用麥克風，請改用 Win+H','service-not-allowed':'這個頁面不能使用語音辨識，請改用 Win+H','no-speech':'沒有聽到聲音','network':'語音辨識需要網路'})[e.error]||('語音辨識錯誤：'+e.error)};
+    rec.onend=()=>{rec=null;mic.classList.remove('on');mic.textContent='🎤 說話';ta.value=base.trim();ta.focus()};
+    try{rec.start();mic.classList.add('on');mic.textContent='■ 停止';st.textContent='正在聽…說完按停止'}catch(e){rec=null;st.textContent='語音辨識無法啟動，請改用 Win+H'}
+  });
+
+  /* ---------- 送出 ---------- */
+  function prompt(reason){
+    return `你是交易者盤中的「反方」。交易者只做 MES（微型 S&P 500 期貨），用 Al Brooks 5 分 K 價格行為；圖上藍線是 EMA20。現在台灣時間 ${tpe(Date.now())}。
+${IMG?'附上的是他現在的 TopstepX 截圖。':'這次沒有附截圖，只能依他的描述回答。'}
+今天盤前的背景判斷：${PRE.bias||'沒填'}${PRE.biasNote?'（'+PRE.biasNote+'）':''}
+他的規則：
+${RULES||'（沒有提供）'}
+
+他想做的單和理由：「${reason||'（沒有說明，只貼了圖）'}」
+
+你的工作是提出反對意見，幫他看到另一邊，不是幫他做決定。請注意：
+- 看圖說話，提到具體的 K 棒、價位、EMA 的位置和方向；圖上看不出來的不要編。
+- 特別檢查：今天是不是一面倒的日子（價格一直在 EMA 同一側）、他是不是在逆勢、是不是在猜反轉。
+- 如果他提到已經連虧 3 筆、或今天虧到 $500，直接提醒他收工，其他欄位留空。
+- 不要說「可以進場」或「不要進場」。用正體中文，每一點一句話，要短，30 秒內能讀完。
+只回覆 JSON：{"stop":"如需提醒收工就寫一句，否則空字串","opposite":["反方向理由1","反方向理由2"],"weak":"他的理由哪裡依據不足","checks":[{"t":"規則檢查一句話","warn":true}],"premortem":"如果這筆停損了，最可能的原因"}`}
+  function show(r,reason,at){
+    rep.replaceChildren(el('h2',null,'反方的看法'));
+    const meta=el('p','sub',`${tpe(at)}　你說：${reason||'（只貼了圖）'}`);rep.append(meta);
+    const sec=(title,node)=>{const s=el('div','cx-sec');s.append(el('h3',null,title),node);rep.append(s)};
+    if(r.stop){const p=el('p','cx-warn','⚠️ '+r.stop);sec('先停一下',p)}
+    if((r.opposite||[]).length){const ol=el('ol');r.opposite.forEach(x=>ol.append(el('li',null,x)));sec('反方向的理由',ol)}
+    if(r.weak)sec('你的理由哪裡依據不足',el('p',null,r.weak));
+    if((r.checks||[]).length){const ul=el('ul');r.checks.forEach(c=>ul.append(el('li',c.warn?'cx-warn':'cx-ok',(c.warn?'⚠️ ':'')+c.t)));sec('規則檢查',ul)}
+    if(r.premortem)sec('如果這筆停損了',el('p',null,r.premortem));
+  }
+  async function submit(){
+    if(busy)return;const reason=ta.value.trim();
+    if(!IMG&&!reason){st.textContent='先貼截圖或說一段話';return}
+    if(!AI){try{AI=await window.claude?.use?.('sample')}catch(e){AI=null}}
+    if(!AI){st.textContent='這個檢視不能使用 Claude（日誌設定裡要有 Anthropic API key）';return}
+    if(rec)rec.stop();
+    busy=true;send.disabled=true;st.textContent='反方正在看圖…';const at=Date.now();
+    try{
+      const raw=await AI.json(prompt(reason),IMG?{images:IMG,cache:false}:{cache:false});
+      const r={stop:String(raw?.stop||'').slice(0,200),opposite:(Array.isArray(raw?.opposite)?raw.opposite:[]).slice(0,3).map(x=>String(x).slice(0,200)),weak:String(raw?.weak||'').slice(0,300),
+        checks:(Array.isArray(raw?.checks)?raw.checks:[]).slice(0,6).map(c=>({t:String(c?.t||'').slice(0,200),warn:!!c?.warn})).filter(c=>c.t),premortem:String(raw?.premortem||'').slice(0,300)};
+      last={reason,r,at};show(r,reason,at);st.textContent='';
+      clearImg();ta.value='';
+      if(DB){const id='k'+at;LOG[id]={date:sessionDate(),at:new Date(at).toISOString(),reason,reply:r};drawHist();
+        DB.doc('coach/'+id).set(LOG[id]).catch(()=>{st.textContent='回覆已顯示，但紀錄沒有存成功'})}
+    }catch(e){st.textContent=({bad_key:'Anthropic API key 無效，到「設定」檢查',no_credit:'Anthropic 帳戶餘額不足',rate_limited:'用量暫時到上限，稍後再試',invalid_json:'回覆格式有誤，再送一次',not_granted:'沒有允許頁面使用 Claude',image_rejected:'截圖太大或格式不支援',network:'連不到 Anthropic'})[e&&e.code]||'反方沒有回覆，稍後再試'}
+    finally{busy=false;send.disabled=false}
+  }
+  send.addEventListener('click',submit);
+  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();submit()}});
+  clr.addEventListener('click',()=>{clearImg();ta.value='';st.textContent=''});
+
+  /* ---------- 今天的紀錄 ---------- */
+  function drawHist(){
+    const d=sessionDate(),items=Object.values(LOG).filter(x=>x&&x.date===d).sort((a,b)=>a.at<b.at?1:-1);
+    hisH.textContent=`今天的對話紀錄（${items.length}）`;hl.replaceChildren();
+    if(!items.length){hl.append(el('p','sub','今天還沒有。'));return}
+    items.forEach(x=>{const it=el('div','cx-item');it.tabIndex=0;
+      it.append(el('span','cx-t',tpe(Date.parse(x.at))),el('span','cx-r',x.reason||'（只貼了圖）'));
+      const w=(x.reply?.checks||[]).filter(c=>c.warn).length;if(x.reply?.stop||w)it.append(el('span','cx-w',x.reply?.stop?'⚠️ 提醒收工':`⚠️ ${w} 項規則警告`));
+      const open=()=>show(x.reply||{},x.reason,Date.parse(x.at));it.addEventListener('click',open);it.addEventListener('keydown',e=>{if(e.key==='Enter')open()});hl.append(it)});
+  }
+
+  /* ---------- 連上資料 ---------- */
+  (async()=>{
+    try{DB=await window.claude?.use?.('db')}catch(e){DB=null}
+    try{AI=await window.claude?.use?.('sample')}catch(e){AI=null}
+    if(!AI)st.textContent='這個檢視不能使用 Claude（日誌設定裡要有 Anthropic API key）';
+    if(!DB){drawHist();return}
+    DB.collection('coach').onSnapshot(q=>{LOG={};q.docs.forEach(d=>{LOG[d.id]=d.data()});drawHist()},()=>{});
+    RULES=typeof DEFAULT_CHK_TEXT==='string'?DEFAULT_CHK_TEXT:'';
+    DB.doc('handbook/checklist').onSnapshot(s=>{const d=s.exists&&s.data();if(d&&d.text)RULES=String(d.text)},()=>{});
+    DB.collection('premarket').onSnapshot(q=>{const d=sessionDate();PRE={};q.docs.forEach(x=>{const v=x.data();if(v&&(v.date===d||x.id===d))PRE=v})},()=>{});
+  })();
+})();
+</script>
+
 </body>
 </html>

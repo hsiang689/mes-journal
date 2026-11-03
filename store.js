@@ -26,7 +26,7 @@
   const [OWNER, REPO] = dataRepo();
   const BRANCH = 'main';
   const SPLIT = { days: true };
-  const COLLS = ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket'];
+  const COLLS = ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket', 'coach'];
   const fileOf = (coll, id) => (SPLIT[coll] ? `data/${coll}/${id}.json` : `data/${coll}.json`);
 
   const token = () => LS.get(K.gh);
