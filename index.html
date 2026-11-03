@@ -283,6 +283,13 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
 .cx-main{display:flex;flex-direction:column;height:calc(100vh - 130px);min-height:560px;padding:0;overflow:hidden}
 .cx-head{padding:8px 16px;border-bottom:1px solid var(--grid);display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap}
 .cx-tts{font-size:13px}
+.cx-ttsbox{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cx-vdlg{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;width:min(520px,calc(100vw - 32px))}
+.cx-vdlg::backdrop{background:rgba(0,0,0,.35)}
+.cx-vbox{display:grid;gap:12px;padding:16px}
+.cx-vrow{display:grid;grid-template-columns:90px minmax(0,1fr) auto;gap:10px;align-items:center}
+.cx-vrow select{width:100%;min-width:0;font:400 14px var(--f-sans)}
+.cx-vbox>.linkbtn{justify-self:end}
 .cx-tts[aria-pressed="true"]{background:var(--warn-bg);border-color:var(--warn);color:var(--ink)}
 .cx-say{border:0;background:transparent;cursor:pointer;font-size:12px;padding:0 0 0 6px;opacity:.55;vertical-align:baseline}
 .cx-say:hover,.cx-say:focus-visible{opacity:1}
@@ -332,6 +339,22 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
 .cx-drop:focus,.cx-drop.over{border-color:var(--warn);background:var(--warn-bg)}
 .cx-drop.has{border-style:solid}
 .cx-drop img{max-width:100%;max-height:86px;width:auto;height:auto;border-radius:5px;display:block}
+@media (max-width:600px){.cx-drop{width:110px}}
+.cx-text{width:100%;box-sizing:border-box;min-height:64px;resize:vertical;font:400 15px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.cx-text:focus{outline:2px solid var(--ema);outline-offset:1px}
+.cx-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cx-mic.on{background:var(--bear);border-color:var(--bear);color:#fff}
+.cx-send{font-weight:600}
+.cx-st{font-size:13px;color:var(--ink-3)}
+.cx-side{max-height:calc(100vh - 130px);overflow-y:auto}
+.cx-hist{display:grid;gap:0}
+.cx-item{padding:10px 6px;border-top:1px solid var(--grid);display:grid;gap:3px;cursor:pointer;border-radius:6px}
+.cx-item:first-child{border-top:0}
+.cx-item:hover,.cx-item.on{background:var(--warn-bg)}
+.cx-item .cx-t{font:500 12px var(--f-mono);color:var(--ink-3)}
+.cx-item .cx-r{font-size:14px;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cx-item .cx-w{font-size:13px;color:var(--bear)}
+.cx-bub ul.cx-wl{padding-left:0;list-style:none}
 @media (max-width:600px){.cx-drop{width:110px}}
 .cx-text{width:100%;box-sizing:border-box;min-height:64px;resize:vertical;font:400 15px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
 .cx-text:focus{outline:2px solid var(--ema);outline-offset:1px}
@@ -1158,22 +1181,22 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
    移除方式：刪掉這段 <script>、#view-coach 區塊、#tab-coach 按鈕、TABS 裡的 ['tab-coach','view-coach']、.cx- 開頭的樣式。
    像群組聊天：每說一句，小黃鴨（客觀）、多方、空方、反方各自回覆（四個 API 呼叫同時送出）。
    一張圖一段討論：貼新圖或按「換新討論」就重新開始，前面的對話不帶過去。
-   資料存在 db 的 coach 集合，只存文字：{date, at, msgs:[{r:'u',t}|{r:'a',duck,bull,bear,ctr:{say,warn,stop}}|舊版的 {r:'c',reason,reply}，各帶 at]}；截圖只送給 Claude，不保留。 */
+   資料存在 db 的 coach 集合，只存文字：{date, at, msgs:[{r:'u',t}|{r:'a',duck,bull,bear,ctr:{say,warn,stop}}|舊版的 {r:'c',reason,reply}，各帶 at], img:截圖的 asset id}；截圖存在 assets（GitHub 版是私人 repo 的 data/img/），點開舊討論會把圖讀回來接著聊。 */
 (()=>{
   const $=id=>document.getElementById(id);
   const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
-  let DB=null,AI=null,IMG=null,IMGURL='',LOG={},RULES='',PRE={},busy=false,CUR=null;
+  let DB=null,AI=null,ASSETS=null,IMG=null,IMGURL='',LOG={},RULES='',PRE={},busy=false,CUR=null;
   const ETF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'});
   function sessionDate(){const o={};ETF.formatToParts(new Date()).forEach(x=>o[x.type]=x.value);let d=Date.UTC(+o.year,+o.month-1,+o.day);if((+o.hour%24)>=18)d+=864e5;while([0,6].includes(new Date(d).getUTCDay()))d+=864e5;return new Date(d).toISOString().slice(0,10)}
   const tpe=ms=>new Date(ms).toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',hour12:false});
   const iso=()=>new Date().toISOString();
-  const newThread=()=>({id:null,date:sessionDate(),at:null,msgs:[],img:null});
+  const newThread=()=>({id:null,date:sessionDate(),at:null,msgs:[],local:null,imgId:null});
   // 舊格式（{reason,reply}、{msgs,counter}）轉成現在的格式
   function norm(id,x){
     let m=(Array.isArray(x.msgs)?x.msgs:[]).map(v=>v.r==='a'&&v.t!=null&&v.duck==null?{r:'a',duck:v.t,bull:'',bear:'',at:v.at}:v);
     const c=Array.isArray(x.counter)?x.counter:(x.reply?[{at:x.at,reason:x.reason||'',reply:x.reply}]:[]);
     m=m.concat(c.map(v=>({r:'c',reason:v.reason||'',reply:v.reply||{},at:v.at}))).sort((a,b)=>String(a.at)<String(b.at)?-1:1);
-    return {id,date:x.date,at:x.at,msgs:m,img:null};
+    return {id,date:x.date,at:x.at,msgs:m,local:null,imgId:x.img||null};
   }
   CUR=newThread();
 
@@ -1194,13 +1217,49 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   const ttsBtn=el('button','linkbtn cx-tts');ttsBtn.type='button';
   const ttsLabel=()=>{ttsBtn.textContent=ttsOn?'🔊 朗讀：開':'🔈 朗讀：關';ttsBtn.setAttribute('aria-pressed',String(ttsOn))};ttsLabel();
   if(!TTS){ttsBtn.hidden=true}
-  ttsBtn.addEventListener('click',()=>{ttsOn=!ttsOn;ttsLabel();try{localStorage.setItem('mj-tts',ttsOn?'1':'0')}catch(e){}if(!ttsOn)TTS.cancel()});
+  ttsBtn.addEventListener('click',()=>{ttsOn=!ttsOn;ttsLabel();try{localStorage.setItem('mj-tts',ttsOn?'1':'0')}catch(e){}if(!ttsOn){TTS.cancel();setTimeout(ttsCtl,30)}});
   let VOICES=[];const loadV=()=>{const all=TTS.getVoices()||[];VOICES=all.filter(v=>/^zh[-_](TW|Hant)/i.test(v.lang));if(!VOICES.length)VOICES=all.filter(v=>/^zh/i.test(v.lang))};
   if(TTS){loadV();try{TTS.addEventListener('voiceschanged',loadV)}catch(e){}}
   const VO={duck:[0,1],bull:[1,1.15],bear:[2,.85],ctr:[3,1]};
-  function speak(k,text){if(!TTS||!text)return;const u=new SpeechSynthesisUtterance(text.replace(/⚠️/g,'注意，'));u.lang='zh-TW';const [vi,pi]=VO[k]||[0,1];if(VOICES.length)u.voice=VOICES[vi%VOICES.length];u.pitch=pi;u.rate=1.1;TTS.speak(u)}
+  // 每位可以自己選聲音（記在這台瀏覽器）；沒選就照順序自動分配，再用音高區分
+  let VSEL={};try{VSEL=JSON.parse(localStorage.getItem('mj-voices')||'{}')||{}}catch(e){VSEL={}}
+  function pickVoice(k){const [vi,pi]=VO[k]||[0,1];
+    const all=TTS.getVoices()||[];
+    if(VSEL[k]){const v=all.find(x=>x.voiceURI===VSEL[k]);if(v)return {v,p:1}}
+    // 預設：客觀、多方用 Google 國語（臺灣），空方、反方用 Google 普通话；同一個聲音的兩位用音高區分。沒有這些聲音（例如 Edge）就照順序分配
+    const g=all.find(x=>/Google/i.test(x.name)&&(k==='duck'||k==='bull'?/^zh[-_](TW|Hant)/i:/^zh[-_](CN|Hans)/i).test(x.lang));if(g)return {v:g,p:pi};
+    return {v:VOICES.length?VOICES[vi%VOICES.length]:null,p:pi}}
+  const vBtn=el('button','linkbtn cx-tts','🎙 聲音');vBtn.type='button';if(!TTS)vBtn.hidden=true;
+  const vDlg=el('dialog','cx-vdlg');vDlg.setAttribute('aria-label','朗讀的聲音');
+  const GENDER={Hanhan:'女',Yating:'女',Zhiwei:'男',HsiaoChen:'女',HsiaoYu:'女',YunJhe:'男','國語':'女','普通话':'女',Meijia:'女'};
+  const vName=v=>v.name.replace(/^(Microsoft|Google)\s+/,'').replace(/\s*-\s*Chinese.*$/,'').replace(/\s*Online \(Natural\)/,'（自然）').trim();
+  const vTag=v=>{const n=vName(v),g=Object.keys(GENDER).find(x=>n.includes(x));return n+'（'+langName(v.lang)+(g?'・'+GENDER[g]:'')+(v.localService?'':'・連網')+'）'};
+  const langName=l=>/TW|Hant/i.test(l)?'台灣':/HK|yue/i.test(l)?'香港':/CN|Hans/i.test(l)?'中國':l;
+  function fillV(){
+    const all=(TTS.getVoices()||[]).filter(v=>/^zh/i.test(v.lang)&&!/HK|yue/i.test(v.lang)).sort((a,b)=>(/TW|Hant/i.test(b.lang)-/TW|Hant/i.test(a.lang))||a.name.localeCompare(b.name));
+    const box=el('div','cx-vbox');box.append(el('h2',null,'朗讀的聲音'));
+    ['duck','bull','bear','ctr'].forEach(k=>{const row=el('div','cx-vrow');const nm=el('span','cx-wh');nm.append(avatar(k),el('span',null,WHO[k].name));
+      const sel=el('select');sel.setAttribute('aria-label',WHO[k].name+'的聲音');const pa=pickVoice(k).v;const auto=el('option',null,'預設：'+(pa?vTag(pa):'預設'));auto.value='';sel.append(auto);
+      all.forEach(v=>{const o=el('option',null,vTag(v));o.value=v.voiceURI;sel.append(o)});
+      sel.value=all.some(v=>v.voiceURI===VSEL[k])?VSEL[k]:'';
+      sel.addEventListener('change',()=>{if(sel.value)VSEL[k]=sel.value;else delete VSEL[k];try{localStorage.setItem('mj-voices',JSON.stringify(VSEL))}catch(e){}TTS.cancel();speak(k,'我是'+WHO[k].name+'，這是我的聲音。')});
+      const test=el('button','linkbtn','試聽');test.type='button';test.addEventListener('click',()=>{TTS.cancel();speak(k,'我是'+WHO[k].name+'，這是我的聲音。')});
+      row.append(nm,sel,test);box.append(row)});
+    box.append(el('p','sub',all.length?'清單是這台電腦、這個瀏覽器實際有的中文語音；標「連網」的會把文字送到 Microsoft 或 Google 合成。想要更多台灣中文語音（例如男聲），Windows 到「設定 → 時間與語言 → 語言」的中文（台灣）加裝語音，或改用 Edge。':'這個瀏覽器沒有中文語音。'));
+    const close=el('button','linkbtn','完成');close.type='button';close.addEventListener('click',()=>vDlg.close());box.append(close);
+    vDlg.replaceChildren(box)}
+  vBtn.addEventListener('click',()=>{fillV();try{vDlg.showModal()}catch(e){}});
+  vDlg.addEventListener('click',e=>{if(e.target===vDlg)vDlg.close()});
+  if(TTS)try{TTS.addEventListener('voiceschanged',()=>{if(vDlg.open)fillV()})}catch(e){}
+  function speak(k,text){if(!TTS||!text)return;const u=new SpeechSynthesisUtterance(text.replace(/⚠️/g,'注意，'));u.lang='zh-TW';const pv=pickVoice(k);if(pv.v)u.voice=pv.v;u.pitch=pv.p;u.rate=1.1;u.onstart=u.onend=u.onerror=()=>setTimeout(ttsCtl,30);TTS.speak(u);setTimeout(ttsCtl,30)}
+  // 朗讀中可以暫停、繼續、停止
+  const pauseBtn=el('button','linkbtn cx-tts','⏸ 暫停');pauseBtn.type='button';pauseBtn.hidden=true;
+  const stopBtn=el('button','linkbtn cx-tts','⏹ 停止');stopBtn.type='button';stopBtn.hidden=true;
+  function ttsCtl(){if(!TTS)return;const on=TTS.speaking||TTS.pending;pauseBtn.hidden=stopBtn.hidden=!on;pauseBtn.textContent=TTS.paused?'▶ 繼續':'⏸ 暫停'}
+  pauseBtn.addEventListener('click',()=>{if(TTS.paused)TTS.resume();else TTS.pause();setTimeout(ttsCtl,30)});
+  stopBtn.addEventListener('click',()=>{TTS.cancel();setTimeout(ttsCtl,30)});
   const sayText=(k,m)=>k==='ctr'?[m.ctr?.stop,m.ctr?.say,...(m.ctr?.warn||[])].filter(Boolean).map(s=>s.replace(/[。.]$/,'')).join('。'):(m[k]||'');
-  head.append(who,ttsBtn);
+  const ttsBox=el('span','cx-ttsbox');ttsBox.append(pauseBtn,stopBtn,vBtn,ttsBtn);head.append(who,ttsBox,vDlg);
   const feed=el('div','cx-feed');feed.setAttribute('aria-live','polite');
   const comp=el('div','cx-comp');
   const drop=el('div','cx-drop');drop.contentEditable='true';drop.setAttribute('role','textbox');drop.setAttribute('aria-label','貼上截圖');drop.tabIndex=0;
@@ -1222,12 +1281,19 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   feed.addEventListener('dblclick',openZoom);drop.addEventListener('dblclick',openZoom);
 
   /* ---------- 截圖 ---------- */
-  function setImg(file){if(!file||!/^image\//.test(file.type))return;
-    const fresh=CUR.msgs.length>0;
+  function setImg(file,keep){if(!file||!/^image\//.test(file.type))return;
+    const fresh=!keep&&CUR.msgs.length>0;
     if(fresh)CUR=newThread();
     IMG=file;if(IMGURL)URL.revokeObjectURL(IMGURL);IMGURL=URL.createObjectURL(file);
     const im=el('img');im.src=IMGURL;im.alt='截圖';drop.classList.add('has');drop.title='這段討論用這張圖；貼新圖會開新討論';drop.replaceChildren(im);
     draw();drawHist();st.textContent=fresh?'換了新圖，開始新的討論':'';ta.focus()}
+  // 存起來的截圖：GitHub 版用 MJ.assetUrl，claude.ai 版用 /_blob/
+  const imgSrc=id=>Promise.resolve(window.MJ&&window.MJ.assetUrl?window.MJ.assetUrl(id):'/_blob/'+id);
+  async function restoreImg(th){
+    try{const u=await imgSrc(th.imgId);const b=await (await fetch(u)).blob();if(CUR!==th)return;
+      setImg(new File([b],'s',{type:b.type||'image/png'}),true);th.local=IMGURL;draw()}
+    catch(e){if(CUR===th)st.textContent='截圖讀不到，接著聊只會用文字'}
+  }
   function clearImg(){IMG=null;if(IMGURL)URL.revokeObjectURL(IMGURL);IMGURL='';ph()}
   drop.addEventListener('beforeinput',e=>e.preventDefault());
   drop.addEventListener('keydown',e=>{if(e.key==='Tab'||e.ctrlKey||e.metaKey)return;e.preventDefault()});
@@ -1317,8 +1383,13 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
       const e=el('div','cx-empty');e.append(el('p',null,'貼一張圖，說說你看到什麼。'),el('p','sub','客觀、多方、空方、反方會各自回你。只想問一位就用名字開頭，例如「空方 目標在哪？」。'));feed.append(e);return}
     let firstU=true;
     CUR.msgs.forEach(m=>{
-      if(m.r==='u'){const n=[];if(firstU){if(CUR.img&&CUR.img===IMGURL){const im=el('img');im.src=IMGURL;im.alt='截圖';n.push(im)}else if(CUR.id)n.push(el('p','cx-sub','（截圖沒有保留）'))}
-        firstU=false;if(m.to)n.push(el('span','cx-to','只問 '+WHO[m.to].name));n.push(m.t);const b=bubble('me',n);b.querySelector('.cx-bub').append(el('span','cx-time',tpe(Date.parse(m.at))));return}
+      if(m.r==='u'){const n=[];let pic=false;
+        if(firstU){firstU=false;const iv=CUR.local&&CUR.local===IMGURL?IMGURL:'';
+          // 第一次發言：圖片自己一則，文字另一則
+          if(iv||CUR.imgId){pic=true;const im=el('img');im.alt='截圖';if(iv)im.src=iv;else imgSrc(CUR.imgId).then(u=>{im.src=u},()=>im.replaceWith(el('p','cx-sub','（截圖讀不到）')));bubble('me',[im])}
+          else if(CUR.id)n.push(el('p','cx-sub','（這段討論沒有存截圖）'))}
+        if(pic&&/^（只貼了圖）/.test(m.t))return;
+        if(m.to)n.push(el('span','cx-to','只問 '+WHO[m.to].name));n.push(m.t);const b=bubble('me',n);b.querySelector('.cx-bub').append(el('span','cx-time',tpe(Date.parse(m.at))));return}
       if(m.r==='a'){['duck','bull','bear','ctr'].forEach(k=>{
           if(m.wait&&m.wait[k]){bubble(k,[el('p','cx-sub',IMG?'看圖中…':'想一下…')]).classList.add('wait');return}
           if(k==='ctr'){const c=m.ctr;if(!c||(!c.say&&!c.stop&&!(c.warn||[]).length))return;const n=[];if(c.stop)n.push(el('p','cx-warn','⚠️ '+c.stop));if(c.say)n.push(c.say);
@@ -1340,10 +1411,10 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   }
   function save(){
     if(!DB||!CUR.id)return;
-    const doc={date:CUR.date,at:CUR.at,msgs:CUR.msgs};LOG[CUR.id]=doc;drawHist();
+    const doc={date:CUR.date,at:CUR.at,msgs:CUR.msgs};if(CUR.imgId)doc.img=CUR.imgId;LOG[CUR.id]=doc;drawHist();
     DB.doc('coach/'+CUR.id).set(doc).catch(()=>{st.textContent='回覆已顯示，但紀錄沒有存成功'});
   }
-  function start(){if(!CUR.id){const now=Date.now();CUR.id='k'+now;CUR.at=new Date(now).toISOString();CUR.date=sessionDate();CUR.img=IMGURL||null;drawHist()}}
+  function start(){if(!CUR.id){const now=Date.now();CUR.id='k'+now;CUR.at=new Date(now).toISOString();CUR.date=sessionDate();CUR.local=IMGURL||null;drawHist()}}
   const lock=v=>{busy=v;send.disabled=v};
   const clip=(v,n)=>String(v||'').trim().slice(0,n);
   async function talk(){
@@ -1351,6 +1422,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     if(!t&&!(IMG&&!CUR.msgs.length)){st.textContent=IMG?'說一段話或問個問題':'先貼截圖或說一段話';return}
     if(!(await ready()))return;
     start();ta.value='';st.textContent='';lock(true);if(TTS)TTS.cancel();
+    const th=CUR,up=IMG&&ASSETS&&!th.imgId&&th.local&&th.local===IMGURL?ASSETS.upload(IMG).then(r=>{th.imgId=r.id},()=>{st.textContent='截圖沒有存成功，討論照常'}):null;
     // 用名字開頭（「空方 …」「客觀，…」「多方你…」）就只問那一位
     const mm=t.match(/^\s*[@＠]?(客觀|小黃鴨|多方|空方|反方)(?:[\s,，:：、]+|(?=你))/);
     const to=mm?{客觀:'duck',小黃鴨:'duck',多方:'bull',空方:'bear',反方:'ctr'}[mm[1]]:null,keys=to?[to]:['duck','bull','bear','ctr'];
@@ -1358,9 +1430,9 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     const a={r:'a',duck:'',bull:'',bear:'',ctr:null,at:null,wait:Object.fromEntries(keys.map(k=>[k,1]))};
     const ps=keys.map(k=>ask(k).then(v=>{a[k]=v;if(ttsOn){const s=sayText(k,a);if(s)speak(k,WHO[k].name+'。'+s)}return null},e=>e||{code:'x'}).then(r=>{delete a.wait[k];draw();return r}));
     CUR.msgs.push(a);draw();
-    const errs=(await Promise.all(ps)).filter(Boolean);
+    const errs=(await Promise.all(ps)).filter(Boolean);if(up)await up;
     delete a.wait;a.at=iso();
-    if(errs.length===keys.length){CUR.msgs.splice(-2,2);if(!ta.value)ta.value=t;if(!CUR.msgs.length){CUR.id=null;CUR.at=null}draw();drawHist();st.textContent=errMsg(errs[0])}
+    if(errs.length===keys.length){CUR.msgs.splice(-2,2);if(!ta.value)ta.value=t;if(!CUR.msgs.length){CUR.id=null;CUR.at=null;if(th.imgId){ASSETS.delete(th.imgId).catch(()=>{});th.imgId=null}}draw();drawHist();st.textContent=errMsg(errs[0])}
     else{if(errs.length)st.textContent=`有 ${errs.length} 位沒有回覆：`+errMsg(errs[0]);draw();save()}
     lock(false);
   }
@@ -1379,7 +1451,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
       it.append(el('span','cx-t',tpe(Date.parse(x.at))+(nu?`　${nu} 句`:'')),el('span','cx-r',first));
       let stp=false,w=0;x.msgs.forEach(m=>{if(m.r==='c'){stp=stp||!!m.reply?.stop;w+=(m.reply?.checks||[]).filter(c=>c.warn).length}if(m.r==='a'&&m.ctr){stp=stp||!!m.ctr.stop;w+=(m.ctr.warn||[]).length}});
       if(stp||w)it.append(el('span','cx-w',stp?'⚠️ 提醒收工':`⚠️ ${w} 項規則警告`));
-      const open=()=>{if(busy||x.id===CUR.id)return;clearImg();CUR=x;draw();drawHist();st.textContent='舊的討論沒有保留圖片，接著聊只會用文字'};
+      const open=()=>{if(busy||x.id===CUR.id)return;clearImg();CUR=x;draw();drawHist();st.textContent=x.imgId?'':'這段討論沒有存截圖，接著聊只會用文字';if(x.imgId)restoreImg(x)};
       it.addEventListener('click',open);it.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}});hl.append(it)});
   }
   draw();
@@ -1388,6 +1460,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   (async()=>{
     try{DB=await window.claude?.use?.('db')}catch(e){DB=null}
     try{AI=await window.claude?.use?.('sample')}catch(e){AI=null}
+    try{ASSETS=await window.claude?.use?.('assets')}catch(e){ASSETS=null}
     if(!AI)st.textContent='這個檢視不能使用 Claude（日誌設定裡要有 Anthropic API key）';
     if(!DB){drawHist();return}
     DB.collection('coach').onSnapshot(q=>{LOG={};q.docs.forEach(d=>{LOG[d.id]=d.data()});drawHist()},()=>{});

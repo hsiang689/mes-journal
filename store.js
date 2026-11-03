@@ -215,10 +215,13 @@
   setInterval(poll, 3 * 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
-  // 清掉沒有任何圖解筆記用到的截圖（例如刪除時網路中斷留下的），只清 10 分鐘前上傳的
+  // 清掉沒有任何圖解筆記或小黃鴨討論用到的截圖（例如刪除時網路中斷留下的），只清 10 分鐘前上傳的
   function cleanOrphans() {
     if (!token() || Object.keys(S.ops).length) return;
-    const used = new Set(Object.values(S.data.charts || {}).map((c) => c && c.asset).filter(Boolean));
+    const used = new Set([
+      ...Object.values(S.data.charts || {}).map((c) => c && c.asset),
+      ...Object.values(S.data.coach || {}).map((c) => c && c.img),
+    ].filter(Boolean));
     Object.keys(S.sha).filter((p) => p.startsWith('data/img/')).forEach((p) => {
       const id = p.slice(9), m = id.match(/^([0-9a-z]{8})[0-9a-f]{16}\./);
       if (used.has(id) || !m) return;
