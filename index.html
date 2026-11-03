@@ -265,7 +265,8 @@ dialog.set input{font:400 14px var(--f-mono);color:var(--ink);background:var(--b
 dialog.set .hint{font-size:12px;color:var(--ink-3);line-height:1.6;margin:0}
 dialog.set .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
-/* ===== 盤中反方（cx-）===== */
+/* ===== 小黃鴨（cx-）===== */
+.cx-ico{width:17px;height:17px;vertical-align:-3px;margin-right:5px}
 .cx-wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:900px){.cx-wrap{grid-template-columns:minmax(0,1fr)}}
 .cx-box{display:grid;gap:12px}
@@ -301,7 +302,7 @@ dialog.set .msg{font-size:13px;min-height:1em;margin:0;color:var(--bear)}
     <h1>MES 交易日誌</h1>
     <div class="tabs" role="tablist" aria-label="日誌分頁">
       <button role="tab" id="tab-pre" aria-selected="false" aria-controls="view-pre">盤前提醒</button>
-      <button role="tab" id="tab-coach" aria-selected="false" aria-controls="view-coach">盤中反方</button>
+      <button role="tab" id="tab-coach" aria-selected="false" aria-controls="view-coach"><svg class="cx-ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="17.4" rx="9.6" ry="5.6" fill="#F7C51E" stroke="#B8860B" stroke-width=".8"/><path d="M3.4 15.2c-1.4.6-1.6 2.6-.2 3.2M20.6 15.2c1.4.6 1.6 2.6.2 3.2" fill="none" stroke="#C99A0E" stroke-width="1" stroke-linecap="round"/><circle cx="12" cy="9" r="6.4" fill="#F7C51E" stroke="#B8860B" stroke-width=".8"/><path d="M11.2 2.8c.2-1 1.4-1.4 1.8-.6" fill="none" stroke="#B8860B" stroke-width=".9" stroke-linecap="round"/><circle cx="9.5" cy="8" r="1.05" fill="#1A1A1A"/><circle cx="14.5" cy="8" r="1.05" fill="#1A1A1A"/><circle cx="9.8" cy="7.6" r=".35" fill="#fff"/><circle cx="14.8" cy="7.6" r=".35" fill="#fff"/><ellipse cx="12" cy="11.4" rx="3.3" ry="1.7" fill="#F28C28"/><path d="M8.9 11.4h6.2" stroke="#C4621A" stroke-width=".7" stroke-linecap="round"/></svg>小黃鴨</button>
       <button role="tab" id="tab-day" aria-selected="true" aria-controls="view-day">每日檢討</button>
       <button role="tab" id="tab-notes" aria-selected="false" aria-controls="view-notes">圖解筆記</button>
       <button role="tab" id="tab-over" aria-selected="false" aria-controls="view-over">趨勢總覽</button>
@@ -1090,7 +1091,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
 })();
 </script>
 <script>
-/* ===== 盤中反方：獨立模組 =====
+/* ===== 小黃鴨（盤中反方）：獨立模組 =====
    移除方式：刪掉這段 <script>、#view-coach 區塊、#tab-coach 按鈕、TABS 裡的 ['tab-coach','view-coach']、.cx- 開頭的樣式。
    資料存在 db 的 coach 集合（只存文字：你說的理由＋Claude 的回覆）；截圖只送給 Claude，不保留。 */
 (()=>{
