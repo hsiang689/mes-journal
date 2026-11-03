@@ -335,13 +335,26 @@
     async text(prompt, opt = {}) {
       const key = LS.get(K.ai); if (!key) throw Object.assign(new Error('no key'), { code: 'not_granted' });
       const imgs = opt.images ? (Array.isArray(opt.images) ? opt.images : [opt.images]) : [];
-      const content = [...(await Promise.all(imgs.map(blobToImage))), { type: 'text', text: prompt }];
+      const imgBlocks = await Promise.all(imgs.map(blobToImage));
+      let messages;
+      if (Array.isArray(prompt)) {
+        // 多輪對話：[{role, content}]，從 user 開始、到 user 結束；圖片放在第一句
+        messages = prompt.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: [{ type: 'text', text: String(m.content) }] }));
+        if (!messages.length || messages[0].role !== 'user' || messages[messages.length - 1].role !== 'user') throw Object.assign(new Error('bad turns'), { code: 'bad_request' });
+        messages[0].content.unshift(...imgBlocks);
+        // 提示快取：圖片＋第一句的固定說明，以及到上一輪為止的對話，幾分鐘內重送只算一小部分費用
+        const mark = (m) => { m.content[m.content.length - 1].cache_control = { type: 'ephemeral' }; };
+        mark(messages[0]);
+        if (messages.length > 2) mark(messages[messages.length - 2]);
+      } else {
+        messages = [{ role: 'user', content: [...imgBlocks, { type: 'text', text: prompt }] }];
+      }
       let r;
       try {
         r = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-          body: JSON.stringify({ model: LS.get(K.model) || DEFAULT_MODEL, max_tokens: opt.maxTokens || 4000, messages: [{ role: 'user', content }] }),
+          body: JSON.stringify({ model: LS.get(K.model) || DEFAULT_MODEL, max_tokens: opt.maxTokens || 4000, messages }),
         });
       } catch (e) { throw Object.assign(new Error('network'), { code: 'network' }); }
       if (!r.ok) {
@@ -353,7 +366,8 @@
       if (j.stop_reason === 'refusal') throw Object.assign(new Error('refused'), { code: 'refused' });
       return (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
     },
-    async json(prompt, opt = {}) { return pickJson(await sample.text(prompt + '\n\n只輸出 JSON，不要加任何其他文字或 ``` 標記。', opt)); },
+    // 多輪對話的提示裡要自己寫「只回覆 JSON」（不在最後一句加字，才不會讓快取失效）
+    async json(prompt, opt = {}) { return pickJson(await sample.text(Array.isArray(prompt) ? prompt : prompt + '\n\n只輸出 JSON，不要加任何其他文字或 ``` 標記。', opt)); },
   };
 
   /* ---------- 對外介面 ---------- */
