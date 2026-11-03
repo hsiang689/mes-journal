@@ -4,7 +4,8 @@
  * 讀寫都用 GitHub API 帶 token，沒有 token 就讀不到。
  *   data/days/<YYYY-MM-DD>.json   每個交易日一個檔
  *   data/<collection>.json        其他集合：{ docId: doc }
- *   data/img/<id>.<ext>           截圖
+ *   data/img/<id>.<ext>           圖解筆記的截圖
+ *   data/chat-img/<id>.<ext>      小黃鴨討論的截圖（asset id 是 "chat-img/<id>.<ext>"）
  * 金鑰只存在這台電腦的瀏覽器（localStorage），不會進 repo。
  */
 (() => {
@@ -222,8 +223,8 @@
       ...Object.values(S.data.charts || {}).map((c) => c && c.asset),
       ...Object.values(S.data.coach || {}).map((c) => c && c.img),
     ].filter(Boolean));
-    Object.keys(S.sha).filter((p) => p.startsWith('data/img/')).forEach((p) => {
-      const id = p.slice(9), m = id.match(/^([0-9a-z]{8})[0-9a-f]{16}\./);
+    Object.keys(S.sha).filter((p) => p.startsWith('data/img/') || p.startsWith('data/chat-img/')).forEach((p) => {
+      const id = p.startsWith('data/img/') ? p.slice(9) : p.slice(5), m = id.split('/').pop().match(/^([0-9a-z]{8})[0-9a-f]{16}\./);
       if (used.has(id) || !m) return;
       const at = parseInt(m[1], 36);
       if (!(at > 1.6e12 && Date.now() - at > 10 * 60e3)) return;
@@ -277,19 +278,22 @@
   /* ---------- 截圖 ---------- */
   const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
   const imgJobs = {};
-  function assetBlob(id) { return ghRaw('data/img/' + id, BRANCH).then((r) => r.blob()); }
+  // asset id 沒有資料夾就是 data/img/，有的話（例如 chat-img/xxx.png）就是 data/<id>
+  const imgPath = (id) => (id.includes('/') ? 'data/' + id : 'data/img/' + id);
+  function assetBlob(id) { return ghRaw(imgPath(id), BRANCH).then((r) => r.blob()); }
   // 有快取就回傳網址字串，沒有就回傳 Promise（下載完成後是 blob: 網址）
   function assetUrl(id) {
     if (S.localImg[id]) return S.localImg[id];
     return imgJobs[id] || (imgJobs[id] = assetBlob(id).then((b) => (S.localImg[id] = URL.createObjectURL(b))).catch((e) => { delete imgJobs[id]; throw e; }));
   }
   const assets = {
-    async upload(file) {
+    async upload(file, opt = {}) {
       if (!token()) throw Object.assign(new Error('no token'), { code: 'no_token' });
+      const dir = opt.dir === 'chat-img' ? 'chat-img/' : '';
       const ext = EXT[file.type] || 'png';
       const rnd = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
-      const id = `${Date.now().toString(36)}${rnd}.${ext}`;
-      const path = 'data/img/' + id;
+      const id = `${dir}${Date.now().toString(36)}${rnd}.${ext}`;
+      const path = imgPath(id);
       const bytes = new Uint8Array(await file.arrayBuffer());
       S.localImg[id] = URL.createObjectURL(file);
       await queue(async () => {
@@ -299,7 +303,7 @@
       return { id, url: S.localImg[id] };
     },
     async delete(id) {
-      const path = 'data/img/' + id;
+      const path = imgPath(id);
       await queue(async () => {
         for (let attempt = 0; ; attempt++) {
           let sha = attempt ? null : S.sha[path];

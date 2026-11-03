@@ -1181,7 +1181,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
    移除方式：刪掉這段 <script>、#view-coach 區塊、#tab-coach 按鈕、TABS 裡的 ['tab-coach','view-coach']、.cx- 開頭的樣式。
    像群組聊天：每說一句，小黃鴨（客觀）、多方、空方、反方各自回覆（四個 API 呼叫同時送出）。
    一張圖一段討論：貼新圖或按「換新討論」就重新開始，前面的對話不帶過去。
-   資料存在 db 的 coach 集合，只存文字：{date, at, msgs:[{r:'u',t}|{r:'a',duck,bull,bear,ctr:{say,warn,stop}}|舊版的 {r:'c',reason,reply}，各帶 at], img:截圖的 asset id}；截圖存在 assets（GitHub 版是私人 repo 的 data/img/），點開舊討論會把圖讀回來接著聊。 */
+   資料存在 db 的 coach 集合，只存文字：{date, at, msgs:[{r:'u',t}|{r:'a',duck,bull,bear,ctr:{say,warn,stop}}|舊版的 {r:'c',reason,reply}，各帶 at], img:截圖的 asset id}；截圖存在 assets（GitHub 版是私人 repo 的 data/chat-img/），點開舊討論會把圖讀回來接著聊。 */
 (()=>{
   const $=id=>document.getElementById(id);
   const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
@@ -1423,7 +1423,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     if(!t&&!(IMG&&!CUR.msgs.length)){st.textContent=IMG?'說一段話或問個問題':'先貼截圖或說一段話';return}
     if(!(await ready()))return;
     start();ta.value='';st.textContent='';lock(true);if(TTS)TTS.cancel();
-    const th=CUR,up=IMG&&ASSETS&&!th.imgId&&th.local&&th.local===IMGURL?ASSETS.upload(IMG).then(r=>{th.imgId=r.id},()=>{st.textContent='截圖沒有存成功，討論照常'}):null;
+    const th=CUR,up=IMG&&ASSETS&&!th.imgId&&th.local&&th.local===IMGURL?ASSETS.upload(IMG,window.MJ?{dir:'chat-img'}:undefined).then(r=>{th.imgId=r.id},()=>{st.textContent='截圖沒有存成功，討論照常'}):null;
     // 用名字開頭（「空方 …」「客觀，…」「多方你…」）就只問那一位
     const mm=t.match(/^\s*[@＠]?(客觀|小黃鴨|多方|空方|反方)(?:[\s,，:：、]+|(?=你))/);
     const to=mm?{客觀:'duck',小黃鴨:'duck',多方:'bull',空方:'bear',反方:'ctr'}[mm[1]]:null,keys=to?[to]:ORDER;
