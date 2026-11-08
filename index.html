@@ -44,6 +44,15 @@
 .themes button{font:500 12px var(--f-sans);border:0;background:transparent;color:var(--ink-3);padding:3px 9px;border-radius:6px;cursor:pointer}
 .themes button[aria-pressed="true"]{background:var(--warn-bg);color:var(--ink)}
 .themes button:focus-visible{outline:2px solid var(--warn);outline-offset:1px}
+/* 深色：盤前提醒不用咖啡色底，改成深灰卡片＋細琥珀框，文字和按鈕對比拉開 */
+:root[data-theme="dark"] .focus{background:var(--panel);border-color:rgba(231,164,65,.55)}
+:root[data-theme="dark"] .chk-col{background:#1c252d;border-color:var(--line)}
+:root[data-theme="dark"] .focus .check,:root[data-theme="dark"] .check{border-top-color:var(--grid)}
+:root[data-theme="dark"] .bias-opt,:root[data-theme="dark"] .bq-opt{background:#1c252d;border-color:var(--line)}
+:root[data-theme="dark"] .bias-opt:hover,:root[data-theme="dark"] .bq-opt:hover{border-color:#4a5a66}
+:root[data-theme="dark"] .bias-opt.on,:root[data-theme="dark"] .bq-opt.on{background:#2a2416;border-color:var(--warn)}
+:root[data-theme="dark"] .focus textarea,:root[data-theme="dark"] .focus .cap{background:var(--bg);border-color:var(--line)}
+:root[data-theme="dark"] .check input{accent-color:#3ccf9f}
 /* 深色：輸入框提示字、小黃鴨名字顏色 */
 ::placeholder{color:var(--ink-3);opacity:1}
 :root[data-theme="dark"] .cx-m.duck .cx-name{color:#e3b341}
