@@ -26,12 +26,12 @@
   --f-num:"Barlow Condensed","IBM Plex Mono",ui-monospace,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0f1418; --panel:#161d23; --ink:#e6ebef; --ink-2:#a9b5bf; --ink-3:#6f7d89;
-  --grid:#222c34; --line:#2c3842; --bull:#2fb88f; --bear:#ec6170; --ema:#5c97ef; --level:#5d6a75;
+  --bg:#0f1418; --panel:#161d23; --ink:#e3e8ec; --ink-2:#b6c1ca; --ink-3:#8b98a3;
+  --grid:#25303a; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96;
   --warn:#e7a441; --warn-bg:#2a2214; --stop-bg:rgba(236,97,112,.08); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0f1418; --panel:#161d23; --ink:#e6ebef; --ink-2:#a9b5bf; --ink-3:#6f7d89;
-  --grid:#222c34; --line:#2c3842; --bull:#2fb88f; --bear:#ec6170; --ema:#5c97ef; --level:#5d6a75;
+  --bg:#0f1418; --panel:#161d23; --ink:#e3e8ec; --ink-2:#b6c1ca; --ink-3:#8b98a3;
+  --grid:#25303a; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96;
   --warn:#e7a441; --warn-bg:#2a2214; --stop-bg:rgba(236,97,112,.08); color-scheme:dark}
 /* 護眼：暖色、低眩光（預設） */
 :root[data-theme="eye"]{
@@ -44,6 +44,10 @@
 .themes button{font:500 12px var(--f-sans);border:0;background:transparent;color:var(--ink-3);padding:3px 9px;border-radius:6px;cursor:pointer}
 .themes button[aria-pressed="true"]{background:var(--warn-bg);color:var(--ink)}
 .themes button:focus-visible{outline:2px solid var(--warn);outline-offset:1px}
+/* 深色：輸入框提示字、小黃鴨名字顏色 */
+::placeholder{color:var(--ink-3);opacity:1}
+:root[data-theme="dark"] .cx-m.duck .cx-name{color:#e3b341}
+@media (prefers-color-scheme: dark){:root:not([data-theme]) .cx-m.duck .cx-name{color:#e3b341}}
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;line-height:1.6}
 .wrap{max-width:1440px;margin:0 auto;padding-block:18px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
