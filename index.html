@@ -1122,7 +1122,7 @@ function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textConte
 function savePre(){if(!DB)return;const body={date:TODAY,checks:{...((PRE||{}).checks||{})},plan:String((PRE||{}).plan||''),bias:String((PRE||{}).bias||''),biasNote:String((PRE||{}).biasNote||''),trendKind:String((PRE||{}).trendKind||''),rangeKind:String((PRE||{}).rangeKind||''),cycleAge:String((PRE||{}).cycleAge||''),trend90:String((PRE||{}).trend90||''),trend300:String((PRE||{}).trend300||''),updatedAt:new Date().toISOString()};preSt('儲存中…');preChain=preChain.then(()=>DB.doc('premarket/'+TODAY).set(body)).then(()=>preSt('已儲存')).catch(()=>preSt('儲存失敗，稍後再試'))}
 function applyPre(){{const bv0=(PRE&&PRE.bias)||'';document.querySelectorAll('.bq-if-trend').forEach(x=>x.hidden=!(bv0==='多頭'||bv0==='空頭'));document.querySelectorAll('.bq-if-range').forEach(x=>x.hidden=bv0!=='區間');const kd=(bv0==='多頭'||bv0==='空頭')?(PRE&&PRE.trendKind):bv0==='區間'?(PRE&&PRE.rangeKind):'';document.querySelectorAll('.bq-if-kind').forEach(x=>x.hidden=!kd)}/* 選了 ① 才顯示 ②，選了 ② 才顯示 ③ */document.querySelectorAll('.bq-opt').forEach(b=>{const on=((PRE&&PRE[b.dataset.k])||'')===b.dataset.v;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('biasNote');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v){bn.value=v;grow(bn)}}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=n>=CHECKS.length?`${n} / ${CHECKS.length} 全部複習過了`:`${n} / ${CHECKS.length} 已複習`;const ta=$('prePlan');if(ta&&document.activeElement!==ta){const v=String((PRE&&PRE.plan)||'');if(ta.value!==v){ta.value=v;grow(ta)}}}
 function markSize(text,parent){const re=/(艙位|倉位|口數|\d+\s*口)/g;let last=0,m;while((m=re.exec(text))){if(m.index>last)parent.append(document.createTextNode(text.slice(last,m.index)));parent.append(h('mark',null,m[0]));last=m.index+m[0].length}if(last<text.length)parent.append(document.createTextNode(text.slice(last)))}
-function chkBlocks(){const bl=[];CHECKS.forEach(it=>{const c=it[3]||'',cur=bl[bl.length-1];if(!cur||it[4]||cur.gid!==it[5]||(!c&&cur.items.length>=CHK_GROUP))bl.push({cat:c,gid:it[5],pb:!!it[4],items:[it]});else cur.items.push(it)});return bl}
+function chkBlocks(){const bl=[];CHECKS.forEach(it=>{const c=it[3]||'',cur=bl[bl.length-1];if(!cur||it[4]||cur.gid!==it[5]||cur.items.length>=CHK_GROUP)bl.push({cat:c,gid:it[5],pb:!!it[4],items:[it]});else cur.items.push(it)});return bl}
 function chkPages(){const pg=[];chkBlocks().forEach(b=>{const cur=pg[pg.length-1];if(!cur||b.pb||cur.length>=CHK_BLOCKS)pg.push([b]);else cur.push(b)});return pg}
 function fillChecks(ck){
   ck.replaceChildren();
@@ -1140,7 +1140,7 @@ function fillChecks(ck){
     const cancel=h('button','linkbtn','取消');cancel.type='button';cancel.addEventListener('click',()=>{CHKEDIT=null;fillChecks(ck);applyPre()});
     const sv=h('button','linkbtn','儲存');sv.type='button';sv.style.fontWeight='600';sv.addEventListener('click',save);
     acts.append(cancel,sv);
-    ck.append(h('p','sub chk-hint','一行一條規則；用「-」開頭的行是上一條規則的說明，可以有好幾行；用「#」開頭的行是分類，每個「#」各自一塊（名稱相同也會分開）；單獨一行「===」強制換頁，也會結束上面的分類。空行只是方便閱讀。Ctrl＋Enter 儲存，Esc 取消。'),ta,msg);
+    ck.append(h('p','sub chk-hint','一行一條規則；用「-」開頭的行是上一條規則的說明，可以有好幾行；用「#」開頭的行是分類標題，底下的規則每 3 條一欄、由上往下再往右排，一頁最多三欄；單獨一行「===」強制換頁，也會結束上面的分類。空行只是方便閱讀。Ctrl＋Enter 儲存，Esc 取消。'),ta,msg);
     requestAnimationFrame(()=>{grow(ta);ta.focus()});return}
   const PG=chkPages(),pages=Math.max(1,PG.length);CHKPAGE=Math.min(Math.max(0,CHKPAGE),pages-1);
   mid.append(pg);
@@ -1149,15 +1149,12 @@ function fillChecks(ck){
     nav.append(pv,h('span','prog',`第 ${CHKPAGE+1} / ${pages} 頁`),nx);mid.append(nav)}
   if(DB){const ed=h('button','linkbtn','編輯');ed.type='button';ed.addEventListener('click',()=>{CHKEDIT=CHKTXT||DEFAULT_CHK_TEXT;fillChecks(ck)});acts.append(ed)}
   const list=h('div','chk-cols');
-  /* 這頁只有一個區塊（例如「#」分類後接「===」）：把它的規則平均分到各欄，分類名稱橫跨在上面 */
-  let blks=PG[CHKPAGE]||[];
-  if(blks.length===1&&blks[0].items.length>1){const b=blks[0],L=b.items.length,n=Math.min(CHK_BLOCKS,L);blks=[];
-    if(b.cat)list.append(h('div','chk-cat chk-span',b.cat));
-    for(let k=0;k<n;k++)blks.push({cat:'',items:b.items.slice(Math.round(k*L/n),Math.round((k+1)*L/n))})}
-  for(const blk of blks){const col=h('div','checks chk-col');list.append(col);if(blk.cat)col.append(h('div','chk-cat',blk.cat));
+  /* 分類名稱橫跨整列；底下的規則每 3 條一欄，由上往下、再往右排 */
+  const blks=PG[CHKPAGE]||[];
+  blks.forEach((blk,i)=>{if(blk.cat&&(i===0||blks[i-1].gid!==blk.gid))list.append(h('div','chk-cat chk-span',blk.cat));const col=h('div','checks chk-col');list.append(col);
   blk.items.forEach(([id,tt,ds],k)=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;
     const sp2=h('span',null,tt);ds.forEach(d=>sp2.append(h('small',null,d)));lb.append(cb,sp2);
-    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});col.append(lb)})}
+    cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});col.append(lb)})});
   ck.append(list);
 }
 function renderPre(){
