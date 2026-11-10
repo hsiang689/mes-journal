@@ -166,6 +166,7 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .quote .qt{white-space:pre-wrap;color:var(--ink);min-width:0;overflow-wrap:anywhere}
 .quote mark{background:transparent;color:var(--bear);font-weight:500}
 .checks{display:grid;gap:2px}
+.src-tag{font-size:12px;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:0 6px;line-height:18px;white-space:nowrap}
 .chk-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
 .chk-cat{font-size:13px;font-weight:600;color:var(--warn);letter-spacing:.04em;padding:10px 0 2px}
 .chk-cat+.check{border-top:0}
@@ -610,6 +611,8 @@ function renderDay(){
   const lg=h('div','legend');lg.innerHTML='<span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--bull)"></i>買進</span><span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--bear)"></i>放空</span><span><i style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ink-2);background:var(--panel)"></i>出場</span><span><i style="width:14px;height:2px;background:var(--ema);vertical-align:3px"></i>20 EMA</span><span><i style="width:14px;border-top:1px dashed var(--level);vertical-align:3px"></i>前日與夜盤價位</span>';
   const hov=h('span','hover','滑過 K 棒看開高低收');
   if((day.prevBars||[]).length){const tg=h('label','tog');tg.htmlFor='showPrev';const pc=document.createElement('input');pc.type='checkbox';pc.id='showPrev';pc.checked=showPrev;tg.append(pc,document.createTextNode('顯示前一日'));pc.addEventListener('change',()=>{showPrev=pc.checked;try{localStorage.setItem('journal-prev',showPrev?'1':'0')}catch(e){}renderDay()});lg.append(tg)}
+  /* K 線來源：收盤 8 小時內是 Yahoo 的暫時資料，之後自動換成 Databento */
+  if(day.barsSrc==='yahoo'&&(day.bars||[]).length){const st=h('span','src-tag',day.barsPartial?'資料來源：Yahoo（盤中，還沒到齊）':'資料來源：Yahoo（暫時）');st.title='收盤 8 小時後會自動換成 Databento（CME 原始資料），價位可能差一兩點';lg.append(st)}
   lg.prepend(hov);lg.classList.add('top');cp.append(lg,ch);
   split.append(cp,led);wrap.append(split);
   if((day.bars||[]).length)groups=drawChart(svg,day,hov);else{groups=[];cp.replaceChildren(barsPlaceholder(day))}
