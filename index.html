@@ -344,7 +344,7 @@ button.cx-wh[aria-pressed="false"]{opacity:.38;filter:grayscale(1);text-decorati
 .cx-av.duck{background:#fff4c2}
 .cx-av.bull{background:var(--bull)}
 .cx-av.bear{background:var(--bear)}
-.cx-av.ctr{background:var(--warn)}
+.cx-av.ctr{background:var(--warn)}.cx-av.sum{background:var(--ink-2)}.cx-m.sum .cx-bub{border-color:var(--ink-3)}.cx-m.sum .cx-name{color:var(--ink)}.cx-lean b{font-size:15px;margin-right:2px}
 .cx-bub{background:var(--bg);border:1px solid var(--grid);border-radius:12px;padding:8px 12px;display:grid;gap:4px;min-width:0}
 .cx-m.me .cx-bub{background:var(--warn-bg);border-color:transparent}
 .cx-m.ctr .cx-bub{border-color:var(--warn)}
@@ -1264,7 +1264,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
    移除方式：刪掉這段 <script>、#view-coach 區塊、#tab-coach 按鈕、TABS 裡的 ['tab-coach','view-coach']、.cx- 開頭的樣式。
    像群組聊天：每說一句，小黃鴨（客觀）、多方、空方、反方各自回覆（四個 API 呼叫同時送出）。
    一張圖一段討論：貼新圖或按「換新討論」就重新開始，前面的對話不帶過去。
-   資料存在 db 的 coach 集合，只存文字：{date, at, msgs:[{r:'u',t}|{r:'a',duck,bull,bear,ctr:{say,warn,stop}}|舊版的 {r:'c',reason,reply}，各帶 at], img:截圖的 asset id}；截圖存在 assets（GitHub 版是私人 repo 的 data/chat-img/），點開舊討論會把圖讀回來接著聊。 */
+   資料存在 db 的 coach 集合，只存文字：{date, at, msgs:[{r:'u',t}|{r:'a',duck,bull,bear,ctr:{say,warn,stop}}|{r:'u',t,to:'sum'} 後接 {r:'s',sum:{lean,why,long,short,note}}（統整）|舊版的 {r:'c',reason,reply}，各帶 at], img:截圖的 asset id}；截圖存在 assets（GitHub 版是私人 repo 的 data/chat-img/），點開舊討論會把圖讀回來接著聊。 */
 (()=>{
   const $=id=>document.getElementById(id);
   const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
@@ -1286,7 +1286,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   /* ---------- 人物 ---------- */
   const duckSvg=()=>{const s=document.querySelector('#tab-coach svg');return s?s.cloneNode(true):el('span',null,'鴨')};
   const ORDER=['bull','bear','duck','ctr']; // 顯示、朗讀的順序：多方、空方、客觀、反方
-  const WHO={duck:{name:'客觀'},bull:{name:'多方',av:'多'},bear:{name:'空方',av:'空'},ctr:{name:'反方',av:'反'}};
+  const WHO={duck:{name:'客觀'},bull:{name:'多方',av:'多'},bear:{name:'空方',av:'空'},ctr:{name:'反方',av:'反'},sum:{name:'統整',av:'統'}};
   function avatar(k){const a=el('span','cx-av '+k);if(k==='duck'){const s=duckSvg();s.removeAttribute('class');a.append(s)}else a.textContent=WHO[k].av;return a}
 
   /* ---------- 畫面 ---------- */
@@ -1340,7 +1340,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   vBtn.addEventListener('click',()=>{fillV();try{vDlg.showModal()}catch(e){}});
   vDlg.addEventListener('click',e=>{if(e.target===vDlg)vDlg.close()});
   if(TTS)try{TTS.addEventListener('voiceschanged',()=>{if(vDlg.open)fillV()})}catch(e){}
-  function speak(k,text){if(!TTS||!text)return;const u=new SpeechSynthesisUtterance(text.replace(/⚠️/g,'注意，'));u.lang='zh-TW';const pv=pickVoice(k);if(pv.v)u.voice=pv.v;u.pitch=pv.p;u.rate=1.1;u.onstart=u.onend=u.onerror=()=>setTimeout(ttsCtl,30);TTS.speak(u);setTimeout(ttsCtl,30)}
+  function speak(k,text){if(!TTS||!text)return;const u=new SpeechSynthesisUtterance(text.replace(/⚠️/g,'注意，'));u.lang='zh-TW';const pv=pickVoice(k==='sum'?'duck':k);if(pv.v)u.voice=pv.v;u.pitch=pv.p;u.rate=1.1;u.onstart=u.onend=u.onerror=()=>setTimeout(ttsCtl,30);TTS.speak(u);setTimeout(ttsCtl,30)}
   // 朗讀中可以暫停、繼續、停止
   const pauseBtn=el('button','linkbtn cx-tts','⏸ 暫停');pauseBtn.type='button';pauseBtn.hidden=true;
   const stopBtn=el('button','linkbtn cx-tts','⏹ 停止');stopBtn.type='button';stopBtn.hidden=true;
@@ -1353,7 +1353,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   const comp=el('div','cx-comp');
   const drop=el('div','cx-drop');drop.contentEditable='true';drop.setAttribute('role','textbox');drop.setAttribute('aria-label','貼上截圖');drop.tabIndex=0;
   const ph=()=>{drop.classList.remove('has');drop.title='Win+Shift+S 截圖後，點這裡按 Ctrl+V 貼上，或拖進來。同一張圖可以一直聊，貼新圖就開新討論。';drop.replaceChildren(el('span',null,'Ctrl+V 貼圖或拖進來'))};ph();
-  const ta=el('textarea','cx-text');ta.id='cxText';ta.rows=2;ta.placeholder='說說你看到什麼、想問什麼。只想問一位就用名字開頭，例如「空方 目標在哪？」（🎤 說話或 Win+H）';
+  const ta=el('textarea','cx-text');ta.id='cxText';ta.rows=2;ta.placeholder='說說你看到什麼、想問什麼。只想問一位就用名字開頭，例如「空方 目標在哪？」；輸入「統整」整理大家的看法（🎤 說話或 Win+H）';
   const row=el('div','cx-row');
   const mic=el('button','linkbtn cx-mic','🎤 說話');mic.type='button';
   const send=el('button','linkbtn cx-send','送出');send.type='button';
@@ -1445,6 +1445,41 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     const s=trimIntro(clip(await askText(t,opt),600));return /^（?略）?$/.test(s)?'':s;
   }
 
+  /* ---------- 統整（輸入「統整」才做，一次 API 呼叫）：把目前大家的看法整理成「現在偏哪邊＋多空兩個劇本和進場條件」 ---------- */
+  const sumSay=s=>[s.lean?'現在'+s.lean:'',s.why,s.long&&s.long.plan?'做多：'+s.long.plan+(s.long.entry?'。進場：'+s.long.entry:''):'',s.short&&s.short.plan?'做空：'+s.short.plan+(s.short.entry?'。進場：'+s.short.entry:''):'',s.note].filter(Boolean).map(x=>x.replace(/[。.]$/,'')).join('。');
+  function transcript(){const N={duck:'客觀',bull:'多方',bear:'空方',ctr:'反方'},L=[];
+    CUR.msgs.forEach(m=>{if(m.r==='u'&&m.to!=='sum')L.push('他'+(m.to?'（只問'+N[m.to]+'）':'')+'：'+m.t);if(m.r==='a')ORDER.forEach(k=>{const s=sayText(k,m);if(s)L.push(N[k]+'：'+s)})});return L.join('\n')}
+  async function summarize(t,extra){
+    if(!CUR.msgs.some(m=>m.r==='a')){st.textContent='先讓大家回覆一輪，再輸入「統整」';return}
+    if(!(await ready()))return;
+    ta.value='';st.textContent='';lock(true);if(TTS)TTS.cancel();
+    CUR.msgs.push({r:'u',t,to:'sum',at:iso()});draw({k:'sum',t:IMG?'看圖、整理大家的看法…':'整理大家的看法…'});
+    const p=`你是交易群組裡的「統整」。群組裡有小黃鴨（客觀）、多方、空方、反方，各自看了他的圖。現在他想要一個盤中能直接用的總結：把大家到目前為止說的話整理起來，${IMG?'再看圖確認，':''}告訴他現在偏哪一邊，以及做多、做空兩個劇本各自要看到什麼才進場。
+${ctx()}
+他的規則：
+${RULES||'（沒有提供）'}
+群組到目前為止的對話（越後面越新，以最新一輪為主）：
+${transcript()}
+${extra?'他這次另外說：「'+extra+'」\n':''}要求：
+- lean：「偏多」、「偏空」或「觀望」（在區間中間、訊號不清楚、多空說法差不多時選觀望）。
+- why：一句理由，提到具體的 K 棒或價位。
+- long、short：兩個劇本都要寫。plan 寫在哪裡、什麼情況下做，以及目標；entry 寫「看到什麼才進場」（哪種訊號 K、在哪個價位）；stop 寫停損放哪。逆勢的那一邊，plan 開頭寫「逆勢」，目標只寫 1 倍 MM，賺了就跑。
+- note：他違反或接近違反自己規則的地方；沒有就空字串。
+- 不要說「可以進場」或「不要進場」，決定是他的。只根據圖和群組說過的話，不要編。正體中文、口語，每一欄 60 字以內。
+只回覆 JSON：{"lean":"偏多","why":"...","long":{"plan":"...","entry":"...","stop":"..."},"short":{"plan":"...","entry":"...","stop":"..."},"note":""}`;
+    try{const raw=await AI.json(p,IMG?{images:IMG,cache:false}:{cache:false});
+      const side=x=>({plan:clip(x&&x.plan,200),entry:clip(x&&x.entry,200),stop:clip(x&&x.stop,120)});
+      const s={lean:clip(raw&&raw.lean,8)||'觀望',why:clip(raw&&raw.why,240),long:side(raw&&raw.long),short:side(raw&&raw.short),note:clip(raw&&raw.note,240)};
+      CUR.msgs.push({r:'s',sum:s,at:iso()});draw();save();
+      if(ttsOn)speak('sum','統整。'+sumSay(s))}
+    catch(e){CUR.msgs.pop();if(!ta.value)ta.value=t;draw();st.textContent=errMsg(e)}
+    lock(false);
+  }
+  function sumNodes(s){const n=[];const top=el('p','cx-lean');top.append(el('b',null,s.lean||'觀望'));if(s.why)top.append(document.createTextNode('　'+s.why));n.push(top);
+    [['long','做多'],['short','做空']].forEach(([k,lab])=>{const x=s[k]||{};if(!x.plan&&!x.entry)return;const sec=el('div','cx-sec');sec.append(el('h3',null,lab));
+      if(x.plan)sec.append(el('p',null,x.plan));if(x.entry)sec.append(el('p',null,'進場：'+x.entry));if(x.stop)sec.append(el('p','cx-sub','停損：'+x.stop));n.push(sec)});
+    if(s.note)n.push(el('p','cx-warn','⚠️ '+s.note));return n}
+
   /* ---------- 顯示 ---------- */
   function bubble(k,nodes,at,say){
     const m=el('div','cx-m '+(k==='me'?'me':k));
@@ -1469,7 +1504,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   function draw(pending){
     feed.replaceChildren();
     if(!CUR.msgs.length&&!pending){
-      const e=el('div','cx-empty');e.append(el('p',null,'貼一張圖，說說你看到什麼。'),el('p','sub','客觀、多方、空方、反方會各自回你。只想問一位就用名字開頭，例如「空方 目標在哪？」。'));feed.append(e);return}
+      const e=el('div','cx-empty');e.append(el('p',null,'貼一張圖，說說你看到什麼。'),el('p','sub','客觀、多方、空方、反方會各自回你。只想問一位就用名字開頭，例如「空方 目標在哪？」。大家回過之後，輸入「統整」會整理成現在偏哪邊，加上多空兩個劇本和進場條件。'));feed.append(e);return}
     let firstU=true;
     CUR.msgs.forEach(m=>{
       if(m.r==='u'){const n=[];let pic=false;
@@ -1478,12 +1513,13 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
           if(iv||CUR.imgId){pic=true;const im=el('img');im.alt='截圖';if(iv)im.src=iv;else imgSrc(CUR.imgId).then(u=>{im.src=u},()=>im.replaceWith(el('p','cx-sub','（截圖讀不到）')));bubble('me',[im])}
           else if(CUR.hist)n.push(el('p','cx-sub','（這段討論沒有存截圖）'))}
         if(pic&&/^（只貼了圖）/.test(m.t))return;
-        if(m.to)n.push(el('span','cx-to','只問 '+WHO[m.to].name));else if(m.ask)n.push(el('span','cx-to','問 '+m.ask.map(k=>WHO[k].name).join('、')));n.push(m.t);const b=bubble('me',n);b.querySelector('.cx-bub').append(el('span','cx-time',tpe(Date.parse(m.at))));return}
+        if(m.to&&m.to!=='sum')n.push(el('span','cx-to','只問 '+WHO[m.to].name));else if(m.ask)n.push(el('span','cx-to','問 '+m.ask.map(k=>WHO[k].name).join('、')));n.push(m.t);const b=bubble('me',n);b.querySelector('.cx-bub').append(el('span','cx-time',tpe(Date.parse(m.at))));return}
       if(m.r==='a'){ORDER.forEach(k=>{
           if(m.wait&&m.wait[k]){bubble(k,[el('p','cx-sub',IMG?'看圖中…':'想一下…')]).classList.add('wait');return}
           if(k==='ctr'){const c=m.ctr;if(!c||(!c.say&&!c.stop&&!(c.warn||[]).length))return;const n=[];if(c.stop)n.push(el('p','cx-warn','⚠️ '+c.stop));if(c.say)n.push(c.say);
             if((c.warn||[]).length){const ul=el('ul','cx-wl');c.warn.forEach(w=>ul.append(el('li','cx-warn','⚠️ '+w)));n.push(ul)}bubble('ctr',n,m.at,sayText('ctr',m));return}
           if(m[k])bubble(k,[m[k]],m.at,m[k])});return}
+      if(m.r==='s'){bubble('sum',sumNodes(m.sum||{}),m.at,sumSay(m.sum||{}));return}
       if(m.r==='c')bubble('ctr',counterNodes(m),m.at);
     });
     if(pending){const b=bubble(pending.k,[el('p','cx-sub',pending.t)]);b.classList.add('wait')}
@@ -1508,6 +1544,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   const clip=(v,n)=>String(v||'').trim().slice(0,n);
   async function talk(){
     const t=ta.value.trim();
+    const sm=t.match(/^\s*[@＠]?統整(?:[\s,，:：、]+([\s\S]*))?$/);if(sm){summarize(t,(sm[1]||'').trim());return}
     if(!t&&!(IMG&&!CUR.msgs.length)){st.textContent=IMG?'說一段話或問個問題':'先貼截圖或說一段話';return}
     const mm=t.match(/^\s*[@＠]?(客觀|小黃鴨|多方|空方|反方)(?:[\s,，:：、]+|(?=你))/);
     const to=mm?{客觀:'duck',小黃鴨:'duck',多方:'bull',空方:'bear',反方:'ctr'}[mm[1]]:null,keys=to?[to]:ORDER.filter(k=>ON[k]);
@@ -1571,7 +1608,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   css.textContent='.bell{font:500 12px var(--f-sans);border:1px solid var(--line);background:var(--panel);color:var(--ink-3);padding:4px 10px;border-radius:8px;cursor:pointer}'
     +'.bell-w{display:inline-flex;align-items:center;gap:6px}.bell-v{width:90px;accent-color:var(--warn)}.bell-v[hidden]{display:none}.bell-p{font:500 12px var(--f-mono);color:var(--ink-3);min-width:34px}'
     +'.bell{display:inline-flex;align-items:center;gap:6px}.bell-ring{width:16px;height:16px;transform:rotate(-90deg)}.bell-ring circle{fill:none;stroke:var(--line);stroke-width:2.6}.bell-ring .fg{stroke:var(--warn);stroke-linecap:round;transition:stroke-dashoffset .4s linear}'
-    +'.bell-t{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}'
+    +'.bell-n{font:600 13px var(--f-mono);color:var(--ink-2)}.bell-t{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}'
     +'.bell.on.hot{color:var(--bear);border-color:var(--bear);background:color-mix(in srgb,var(--bear) 12%,var(--panel))}.bell.on.hot .bell-ring .fg{stroke:var(--bear)}'
     +'.bell.on{background:var(--warn-bg);color:var(--ink)}.bell.wait{border-color:var(--warn);color:var(--warn)}.bell:focus-visible{outline:2px solid var(--warn);outline-offset:1px}';
   document.head.append(css);
@@ -1586,7 +1623,10 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   let on=false;try{on=localStorage.getItem('mj-bell')==='1'}catch(e){}
   let ctx=null,gain=null,buf=null,live=[],done=new Set(),iv=null,next=0;
   const ETF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
-  const isBar=t=>{const o={};ETF.formatToParts(new Date(t-3e5)).forEach(p=>o[p.type]=p.value);const m=+o.hour%24*60+ +o.minute;return o.weekday!=='Sat'&&o.weekday!=='Sun'&&m>=570&&m<=965};
+  const etMin=t=>{const o={};ETF.formatToParts(new Date(t-3e5)).forEach(p=>o[p.type]=p.value);return {wd:o.weekday,m:+o.hour%24*60+ +o.minute}};
+  const isBar=t=>{const x=etMin(t);return x.wd!=='Sat'&&x.wd!=='Sun'&&x.m>=570&&x.m<=965};
+  /* 第幾根 K：美東 09:30 那根是 #1（和每日檢討的棒號一樣） */
+  const barNo=t=>(etMin(t).m-570)/5+1;
   /* t = K 棒收盤時間（5 分鐘整數倍），提醒時間 = t - LEAD 秒 */
   function alerts(from,to){const r=[];for(let t=Math.ceil((from+LEAD*1e3)/3e5)*3e5;t-LEAD*1e3<to;t+=3e5)if(isBar(t))r.push(t-LEAD*1e3);return r}
   function nextAlert(now){if(next>now)return next;for(let t=Math.ceil((now+LEAD*1e3)/3e5)*3e5,i=0;i<1500;i++,t+=3e5)if(isBar(t))return next=t-LEAD*1e3;return 0}
@@ -1600,9 +1640,9 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     if(!on){btn.textContent='🔕 K 棒提醒';btn.title='開啟後，每根 5 分 K 收盤前 30 秒響一次（美東 09:30–16:10）'}
     else if(wait){btn.textContent='🔔 點一下啟用提醒';btn.title='瀏覽器要先點一下頁面才能出聲'}
     else{const now=Date.now(),c=Math.floor(now/3e5)*3e5+3e5,tip='K 棒提醒開啟中，點一下關閉'+(buf&&buf.custom?'':'（目前用內建提示音）');
-      if(isBar(c)){const r=Math.min(300,Math.ceil((c-now)/1e3)),C=50.27;hot=r<=LEAD;tt=mmss(r)+' · '+T0;
-        btn.innerHTML='<svg class="bell-ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle class="fg" cx="10" cy="10" r="8" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C*r/300).toFixed(2)+'"/></svg><span class="bell-t">'+mmss(r)+'</span>';
-        btn.title='這根 5 分 K 還剩 '+mmss(r)+'（'+hm(c)+' 收盤）。'+tip}
+      if(isBar(c)){const r=Math.min(300,Math.ceil((c-now)/1e3)),C=50.27;hot=r<=LEAD;const no='#'+barNo(c);tt=no+' '+mmss(r)+' · '+T0;
+        btn.innerHTML='<svg class="bell-ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle class="fg" cx="10" cy="10" r="8" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C*r/300).toFixed(2)+'"/></svg><span class="bell-n">'+no+'</span><span class="bell-t">'+mmss(r)+'</span>';
+        btn.title='現在是 '+no+'，這根 5 分 K 還剩 '+mmss(r)+'（'+hm(c)+' 收盤）。'+tip}
       else{const n=nextAlert(now);btn.textContent='🔔 下次 '+(n?hm(n):'—');btn.title=tip}}
     btn.classList.toggle('hot',hot);if(document.title!==tt)document.title=tt;
   }
