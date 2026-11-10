@@ -1540,6 +1540,71 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   })();
 })();
 </script>
+<script>
+/* K 棒收盤提醒：自成一塊，要拿掉就刪整個 <script>。美東週一到週五 09:30–16:10，每根 5 分 K 收盤前 LEAD 秒響一次 */
+(()=>{
+  const SND='bar-alert.wav',LEAD=60,AHEAD=180e3;
+  const css=document.createElement('style');
+  css.textContent='.bell{font:500 12px var(--f-sans);border:1px solid var(--line);background:var(--panel);color:var(--ink-3);padding:4px 10px;border-radius:8px;cursor:pointer}'
+    +'.bell-w{display:inline-flex;align-items:center;gap:6px}.bell-v{width:90px;accent-color:var(--warn)}.bell-v[hidden]{display:none}.bell-p{font:500 12px var(--f-mono);color:var(--ink-3);min-width:34px}'
+    +'.bell.on{background:var(--warn-bg);color:var(--ink)}.bell.wait{border-color:var(--warn);color:var(--warn)}.bell:focus-visible{outline:2px solid var(--warn);outline-offset:1px}';
+  document.head.append(css);
+  const host=document.querySelector('.ttl');if(!host)return;
+  const wrap=document.createElement('span');wrap.className='bell-w';
+  const btn=document.createElement('button');btn.type='button';btn.className='bell';
+  const vol=document.createElement('input');vol.type='range';vol.className='bell-v';vol.min='0';vol.max='200';vol.step='10';vol.setAttribute('aria-label','提醒音量');
+  const pct=document.createElement('span');pct.className='bell-p';
+  wrap.append(btn,vol,pct);host.append(wrap);
+  let v=100;try{const x=+localStorage.getItem('mj-bell-vol');if(localStorage.getItem('mj-bell-vol')!==null&&x>=0&&x<=200)v=x}catch(e){}
+  vol.value=String(v);
+  let on=false;try{on=localStorage.getItem('mj-bell')==='1'}catch(e){}
+  let ctx=null,gain=null,buf=null,live=[],done=new Set(),iv=null,next=0;
+  const ETF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  const isBar=t=>{const o={};ETF.formatToParts(new Date(t-3e5)).forEach(p=>o[p.type]=p.value);const m=+o.hour%24*60+ +o.minute;return o.weekday!=='Sat'&&o.weekday!=='Sun'&&m>=570&&m<=965};
+  /* t = K 棒收盤時間（5 分鐘整數倍），提醒時間 = t - LEAD 秒 */
+  function alerts(from,to){const r=[];for(let t=Math.ceil((from+LEAD*1e3)/3e5)*3e5;t-LEAD*1e3<to;t+=3e5)if(isBar(t))r.push(t-LEAD*1e3);return r}
+  function nextAlert(now){if(next>now)return next;for(let t=Math.ceil((now+LEAD*1e3)/3e5)*3e5,i=0;i<1500;i++,t+=3e5)if(isBar(t))return next=t-LEAD*1e3;return 0}
+  const hm=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+  function label(){
+    vol.hidden=pct.hidden=!on;pct.textContent=v+'%';
+    btn.classList.toggle('on',on);const wait=on&&(!ctx||ctx.state!=='running');btn.classList.toggle('wait',wait);
+    if(!on){btn.textContent='🔕 K 棒提醒';btn.title='開啟後，每根 5 分 K 收盤前 1 分鐘響一次（美東 09:30–16:10）';return}
+    if(wait){btn.textContent='🔔 點一下啟用提醒';btn.title='瀏覽器要先點一下頁面才能出聲';return}
+    const n=nextAlert(Date.now());btn.textContent='🔔 下次 '+(n?hm(n):'—');btn.title='K 棒提醒開啟中，點一下關閉'+(buf&&buf.custom?'':'（目前用內建提示音）');
+  }
+  function chime(){const sr=ctx.sampleRate,n=Math.floor(sr*.9),b=ctx.createBuffer(1,n,sr),d=b.getChannelData(0);
+    for(let i=0;i<n;i++){const t=i/sr,hi=t>=.3,s=hi?t-.3:t;d[i]=Math.sin(2*Math.PI*(hi?1320:880)*s)*Math.exp(-s*7)*.45}return b}
+  async function load(){if(buf)return;try{const r=await fetch(SND,{cache:'force-cache'});if(!r.ok)throw 0;buf=await ctx.decodeAudioData(await r.arrayBuffer());buf.custom=true}catch(e){buf=chime()}}
+  function play(when){const s=ctx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(when);live.push(s);s.onended=()=>{live=live.filter(x=>x!==s)}}
+  /* 用 AudioContext 的時鐘預排 3 分鐘內的提醒：背景分頁的計時器會被節流，但音訊排程不會 */
+  function tick(){
+    if(on&&ctx&&ctx.state==='running'&&buf){const now=Date.now();
+      for(const a of alerts(now-1e3,now+AHEAD))if(!done.has(a)){done.add(a);play(ctx.currentTime+Math.max(0,(a-now)/1e3))}
+      for(const a of done)if(a<now-6e5)done.delete(a)}
+    label();
+  }
+  async function start(test){
+    if(!ctx){try{ctx=new (window.AudioContext||window.webkitAudioContext)();gain=ctx.createGain();gain.gain.value=v/100;gain.connect(ctx.destination)}catch(e){btn.textContent='這個瀏覽器不能出聲';return}}
+    if(ctx.state!=='running'){try{await ctx.resume()}catch(e){}}
+    if(ctx.state!=='running'){label();return}
+    await load();if(test)play(ctx.currentTime+.05);
+    clearInterval(iv);iv=setInterval(tick,15e3);tick();
+  }
+  function stop(){clearInterval(iv);iv=null;live.forEach(s=>{try{s.stop()}catch(e){}});live=[];done.clear();label()}
+  btn.addEventListener('click',()=>{
+    if(on&&ctx&&ctx.state!=='running'){start(true);return}
+    on=!on;try{localStorage.setItem('mj-bell',on?'1':'0')}catch(e){}
+    on?start(true):stop();label()});
+  /* 音量 0–200%：拖動時馬上套用（已排好的提醒也會跟著變），放開時試響一次 */
+  vol.addEventListener('input',()=>{v=+vol.value;pct.textContent=v+'%';if(gain)gain.gain.value=v/100;try{localStorage.setItem('mj-bell-vol',String(v))}catch(e){}});
+  vol.addEventListener('change',()=>{if(ctx&&ctx.state==='running'&&buf)play(ctx.currentTime+.05)});
+  /* 重新整理後：瀏覽器要求先有一次點擊才能出聲，點頁面任何地方就啟用 */
+  const kick=()=>{if(on&&(!ctx||ctx.state!=='running'))start(false)};
+  ['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,kick,{capture:true}));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
+  label();if(on)start(false);
+})();
+</script>
 
 </body>
 </html>

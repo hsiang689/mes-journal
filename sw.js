@@ -1,8 +1,8 @@
 // MES 交易日誌 — 讓網頁能安裝成應用程式。
 // 只快取網頁本身（網路優先：有網路就拿最新版，沒網路才用快取）；
 // GitHub 資料和 Anthropic 一律直接連線，不經過快取。
-const CACHE = 'mes-journal-v13';
-const SHELL = ['./', './index.html', './store.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon.svg'];
+const CACHE = 'mes-journal-v14';
+const SHELL = ['./', './index.html', './store.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon.svg', './bar-alert.wav'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
