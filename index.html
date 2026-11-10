@@ -1111,7 +1111,7 @@ const CHK_LEGACY={'每筆虧損出場後，先把成交紀錄傳給 Claude':'sen
 const CHK_BLOCKS=3,CHK_GROUP=3;
 function chkId(s){if(CHK_LEGACY[s])return CHK_LEGACY[s];let x=5381;for(const ch of s)x=((x<<5)+x+ch.codePointAt(0))|0;return 'r'+(x>>>0).toString(36)}
 function parseChecks(txt){const out=[],seen={};let cat='',pb=false,gid=0;String(txt||'').split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s)return;
-  if(/^[=＝]{3,}$/.test(s)){pb=true;return}
+  if(/^[=＝]{3,}$/.test(s)){pb=true;cat='';gid++;return}
   if(/^[#＃]/.test(s)){cat=s.replace(/^[#＃]+\s*/,'');gid++;return}
   if(/^[-－–]/.test(s)){const d=s.replace(/^[-－–]\s*/,'');if(out.length&&d)out[out.length-1][2].push(d);return}
   let id=chkId(s);if(seen[id]){let k=2;while(seen[id+'-'+k])k++;id=id+'-'+k}seen[id]=1;out.push([id,s,[],cat,pb,gid]);pb=false});return out}
@@ -1139,7 +1139,7 @@ function fillChecks(ck){
     const cancel=h('button','linkbtn','取消');cancel.type='button';cancel.addEventListener('click',()=>{CHKEDIT=null;fillChecks(ck);applyPre()});
     const sv=h('button','linkbtn','儲存');sv.type='button';sv.style.fontWeight='600';sv.addEventListener('click',save);
     acts.append(cancel,sv);
-    ck.append(h('p','sub chk-hint','一行一條規則；用「-」開頭的行是上一條規則的說明，可以有好幾行；用「#」開頭的行是分類，每個「#」各自一塊（名稱相同也會分開）；單獨一行「===」強制換頁。空行只是方便閱讀。Ctrl＋Enter 儲存，Esc 取消。'),ta,msg);
+    ck.append(h('p','sub chk-hint','一行一條規則；用「-」開頭的行是上一條規則的說明，可以有好幾行；用「#」開頭的行是分類，每個「#」各自一塊（名稱相同也會分開）；單獨一行「===」強制換頁，也會結束上面的分類。空行只是方便閱讀。Ctrl＋Enter 儲存，Esc 取消。'),ta,msg);
     requestAnimationFrame(()=>{grow(ta);ta.focus()});return}
   const PG=chkPages(),pages=Math.max(1,PG.length);CHKPAGE=Math.min(Math.max(0,CHKPAGE),pages-1);
   mid.append(pg);
