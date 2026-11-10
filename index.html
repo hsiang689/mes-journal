@@ -1119,9 +1119,9 @@ function parseBlock(txt,seen){const parts=[];String(txt||'').split(/\r?\n/).forE
   if(/^[#＃]/.test(s)){const t=s.replace(/^[#＃]+\s*/,'');if(t)parts.push(['cat',t]);return}
   if(/^[-－–]/.test(s)){const d=s.replace(/^[-－–]\s*/,''),r=parts[parts.length-1];if(r&&r[0]==='rule'&&d)r[3].push(d);return}
   let id=chkId(s);if(seen[id]){let k=2;while(seen[id+'-'+k])k++;id=id+'-'+k}seen[id]=1;parts.push(['rule',id,s,[]])});return parts}
-/* 頁數只決定顯示幾頁；後面的區塊照樣保留在 blocks 裡，頁數改回來就看得到。複習進度和小黃鴨只看顯示中的頁 */
-function chkSet(bl,n){bl=bl.map(x=>String(x||''));while(bl.length<CHK_PER||bl.length%CHK_PER)bl.push('');n=Math.max(1,Math.round(+n)||bl.length/CHK_PER);while(bl.length<n*CHK_PER)bl.push('');CHKBLK=bl;CHKN=n;const seen={};CHKPARTS=bl.map(t=>parseBlock(t,seen));CHECKS=CHKPARTS.slice(0,n*CHK_PER).flat().filter(p=>p[0]==='rule').map(p=>[p[1]])}
-async function chkStore(){await DB.doc('handbook/checklist').set({blocks:CHKBLK,pages:CHKN,text:textFromBlocks(CHKBLK.slice(0,CHKN*CHK_PER)),updatedAt:new Date().toISOString()})}
+/* 區塊數決定顯示幾個區塊，頁數自動算（每頁 3 個）；後面的區塊照樣保留在 blocks 裡，區塊數改回來就看得到。複習進度和小黃鴨只看顯示中的區塊 */
+function chkSet(bl,n){bl=bl.map(x=>String(x||''));if(!(Math.round(+n)>=1)){n=1;bl.forEach((t,k)=>{if(t.trim())n=k+1})}n=Math.round(+n);while(bl.length<n)bl.push('');CHKBLK=bl;CHKN=n;const seen={};CHKPARTS=bl.map(t=>parseBlock(t,seen));CHECKS=CHKPARTS.slice(0,n).flat().filter(p=>p[0]==='rule').map(p=>[p[1]])}
+async function chkStore(){await DB.doc('handbook/checklist').set({blocks:CHKBLK,count:CHKN,text:textFromBlocks(CHKBLK.slice(0,CHKN)),updatedAt:new Date().toISOString()})}
 let CHKBLK=[],CHKN=1,CHKPARTS=[],CHECKS=[],CHKPAGE=0,CHKEDIT=null;chkSet(blocksFromText(DEFAULT_CHK_TEXT));
 let PRE=null,preChain=Promise.resolve(),preDirty=false;
 function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textContent=t})}
@@ -1132,23 +1132,23 @@ function fillChecks(ck){
   ck.replaceChildren();
   const ch=h('div','chk-head');const pg=h('span','prog');pg.id='preProg';const mid=h('div','chk-mid');const acts=h('div','chk-acts');
   ch.append(h('h2',null,'盤前複習：風控與交易規則'),mid,acts);ck.append(ch);
-  const pages=CHKN;CHKPAGE=Math.min(Math.max(0,CHKPAGE),pages-1);
+  const pages=Math.max(1,Math.ceil(CHKN/CHK_PER));CHKPAGE=Math.min(Math.max(0,CHKPAGE),pages-1);
   const redraw=()=>{fillChecks(ck);applyPre()},go=n=>{CHKPAGE=n;CHKEDIT=null;redraw()};
   mid.append(pg);
   if(pages>1){const nav=h('span','fnav');const pv=h('button','linkbtn','←');pv.type='button';pv.setAttribute('aria-label','上一頁');pv.disabled=CHKPAGE===0;pv.addEventListener('click',()=>go(CHKPAGE-1));
     const nx=h('button','linkbtn','→');nx.type='button';nx.setAttribute('aria-label','下一頁');nx.disabled=CHKPAGE>=pages-1;nx.addEventListener('click',()=>go(CHKPAGE+1));
     nav.append(pv,h('span','prog',`第 ${CHKPAGE+1} / ${pages} 頁`),nx);mid.append(nav)}
   const base=CHKPAGE*CHK_PER;
-  /* 頁數輸入框：只決定顯示幾頁，隱藏的頁面內容不會刪掉 */
-  if(DB&&CHKEDIT===null){const hid=[];for(let q=pages;q<CHKBLK.length/CHK_PER;q++)if(CHKBLK.slice(q*CHK_PER,(q+1)*CHK_PER).some(t=>t.trim()))hid.push(q+1);
-    const lab=h('label','chk-pages');const inp=document.createElement('input');inp.type='number';inp.min='1';inp.max='20';inp.value=String(pages);inp.setAttribute('aria-label','顯示頁數');
-    lab.append('頁數',inp);lab.title='只決定顯示幾頁；隱藏的頁面內容會保留，改回來就看得到';
-    if(hid.length)lab.append(h('span','chk-hid',`第 ${hid.join('、')} 頁已隱藏`));
-    inp.addEventListener('change',async()=>{if(inp.dataset.done)return;let n=Math.round(+inp.value);if(!(n>=1))n=1;if(n>20)n=20;if(n===pages){inp.value=String(n);return}
-      inp.dataset.done='1';chkSet(CHKBLK,n);if(CHKPAGE>=n)CHKPAGE=n-1;setTimeout(redraw);try{await chkStore()}catch(e){}});
+  /* 區塊數輸入框：只決定顯示幾個區塊，隱藏的區塊內容不會刪掉 */
+  if(DB&&CHKEDIT===null){const hid=CHKBLK.slice(CHKN).filter(t=>t.trim()).length;
+    const lab=h('label','chk-pages');const inp=document.createElement('input');inp.type='number';inp.min='1';inp.max='60';inp.value=String(CHKN);inp.setAttribute('aria-label','區塊數');
+    lab.append('區塊數',inp);lab.title='只決定顯示幾個區塊（每頁 3 個，頁數自動算）；隱藏的區塊內容會保留，改回來就看得到';
+    if(hid)lab.append(h('span','chk-hid',`另有 ${hid} 個區塊已隱藏`));
+    inp.addEventListener('change',async()=>{if(inp.dataset.done)return;let n=Math.round(+inp.value);if(!(n>=1))n=1;if(n>60)n=60;if(n===CHKN){inp.value=String(n);return}
+      inp.dataset.done='1';chkSet(CHKBLK,n);const pp=Math.ceil(n/CHK_PER);if(CHKPAGE>=pp)CHKPAGE=pp-1;setTimeout(redraw);try{await chkStore()}catch(e){}});
     acts.append(lab)}
   const list=h('div','chk-cols');
-  for(let k=0;k<CHK_PER;k++){const i=base+k,col=h('div','checks chk-col');list.append(col);
+  for(let k=0;k<CHK_PER&&base+k<CHKN;k++){const i=base+k,col=h('div','checks chk-col');list.append(col);
     if(CHKEDIT&&CHKEDIT.i===i){
       const ta=document.createElement('textarea');ta.id='chkEdit';ta.className='chk-edit';ta.value=CHKEDIT.v;ta.spellcheck=false;ta.setAttribute('aria-label',`編輯第 ${k+1} 個區塊`);
       const msg=h('span','sub');msg.setAttribute('role','status');
@@ -1249,7 +1249,7 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   db.collection('days').onSnapshot(q=>{const prevCur=CUR,prevDoc=DAYS[CUR];DAYS={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)DAYS[v.date]=v});fillSelect();daysReady=true;
     if(CUR!==prevCur||DAYS[CUR]!==prevDoc)renderDay();renderOver();renderBook();renderPre();if(CHARTS.length)fillCharts()},()=>{});
   db.collection('reviews').onSnapshot(q=>{REV={};q.docs.forEach(d=>{REV[d.id]=d.data()});applyReviews();if(daysReady){renderOver();renderPre()}},()=>{});
-  db.doc('handbook/checklist').onSnapshot(s=>{const d=s.exists&&s.data();chkSet(d&&Array.isArray(d.blocks)?d.blocks:blocksFromText((d&&d.text)||DEFAULT_CHK_TEXT),d&&d.pages);const p=$('chkPanel');if(p&&CHKEDIT===null){fillChecks(p);applyPre()}},()=>{});
+  db.doc('handbook/checklist').onSnapshot(s=>{const d=s.exists&&s.data();chkSet(d&&Array.isArray(d.blocks)?d.blocks:blocksFromText((d&&d.text)||DEFAULT_CHK_TEXT),d&&d.count);const p=$('chkPanel');if(p&&CHKEDIT===null){fillChecks(p);applyPre()}},()=>{});
   db.doc('handbook/rules').onSnapshot(s=>{RULES=s.exists?s.data():null;renderBook();renderPre()},()=>{});
   db.collection('cases').onSnapshot(q=>{CASES=q.docs.map(d=>d.data());renderBook();renderPre()},()=>{});
   db.collection('charts').onSnapshot(q=>{CHARTS=q.docs.map(d=>({id:d.id,...d.data()}));fillCharts();renderBook();renderPre()},()=>{});
