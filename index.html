@@ -1548,6 +1548,9 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   const css=document.createElement('style');
   css.textContent='.bell{font:500 12px var(--f-sans);border:1px solid var(--line);background:var(--panel);color:var(--ink-3);padding:4px 10px;border-radius:8px;cursor:pointer}'
     +'.bell-w{display:inline-flex;align-items:center;gap:6px}.bell-v{width:90px;accent-color:var(--warn)}.bell-v[hidden]{display:none}.bell-p{font:500 12px var(--f-mono);color:var(--ink-3);min-width:34px}'
+    +'.bell{display:inline-flex;align-items:center;gap:6px}.bell-ring{width:16px;height:16px;transform:rotate(-90deg)}.bell-ring circle{fill:none;stroke:var(--line);stroke-width:2.6}.bell-ring .fg{stroke:var(--warn);stroke-linecap:round;transition:stroke-dashoffset .4s linear}'
+    +'.bell-t{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}'
+    +'.bell.on.hot{color:var(--bear);border-color:var(--bear);background:color-mix(in srgb,var(--bear) 12%,var(--panel))}.bell.on.hot .bell-ring .fg{stroke:var(--bear)}'
     +'.bell.on{background:var(--warn-bg);color:var(--ink)}.bell.wait{border-color:var(--warn);color:var(--warn)}.bell:focus-visible{outline:2px solid var(--warn);outline-offset:1px}';
   document.head.append(css);
   const host=document.querySelector('.ttl');if(!host)return;
@@ -1566,13 +1569,22 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
   function alerts(from,to){const r=[];for(let t=Math.ceil((from+LEAD*1e3)/3e5)*3e5;t-LEAD*1e3<to;t+=3e5)if(isBar(t))r.push(t-LEAD*1e3);return r}
   function nextAlert(now){if(next>now)return next;for(let t=Math.ceil((now+LEAD*1e3)/3e5)*3e5,i=0;i<1500;i++,t+=3e5)if(isBar(t))return next=t-LEAD*1e3;return 0}
   const hm=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+  const T0=document.title,mmss=r=>String(Math.floor(r/60)).padStart(2,'0')+':'+String(r%60).padStart(2,'0');
+  /* 盤中：按鈕顯示這根 5 分 K 的倒數和進度圈，最後 1 分鐘變紅；分頁標題也跟著倒數 */
   function label(){
     vol.hidden=pct.hidden=!on;pct.textContent=v+'%';
     btn.classList.toggle('on',on);const wait=on&&(!ctx||ctx.state!=='running');btn.classList.toggle('wait',wait);
-    if(!on){btn.textContent='🔕 K 棒提醒';btn.title='開啟後，每根 5 分 K 收盤前 1 分鐘響一次（美東 09:30–16:10）';return}
-    if(wait){btn.textContent='🔔 點一下啟用提醒';btn.title='瀏覽器要先點一下頁面才能出聲';return}
-    const n=nextAlert(Date.now());btn.textContent='🔔 下次 '+(n?hm(n):'—');btn.title='K 棒提醒開啟中，點一下關閉'+(buf&&buf.custom?'':'（目前用內建提示音）');
+    let hot=false,tt=T0;
+    if(!on){btn.textContent='🔕 K 棒提醒';btn.title='開啟後，每根 5 分 K 收盤前 1 分鐘響一次（美東 09:30–16:10）'}
+    else if(wait){btn.textContent='🔔 點一下啟用提醒';btn.title='瀏覽器要先點一下頁面才能出聲'}
+    else{const now=Date.now(),c=Math.floor(now/3e5)*3e5+3e5,tip='K 棒提醒開啟中，點一下關閉'+(buf&&buf.custom?'':'（目前用內建提示音）');
+      if(isBar(c)){const r=Math.min(300,Math.ceil((c-now)/1e3)),C=50.27;hot=r<=LEAD;tt=mmss(r)+' · '+T0;
+        btn.innerHTML='<svg class="bell-ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle class="fg" cx="10" cy="10" r="8" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C*r/300).toFixed(2)+'"/></svg><span class="bell-t">'+mmss(r)+'</span>';
+        btn.title='這根 5 分 K 還剩 '+mmss(r)+'（'+hm(c)+' 收盤）。'+tip}
+      else{const n=nextAlert(now);btn.textContent='🔔 下次 '+(n?hm(n):'—');btn.title=tip}}
+    btn.classList.toggle('hot',hot);if(document.title!==tt)document.title=tt;
   }
+  let clk=null;const loop=()=>{label();clk=on?setTimeout(loop,1005-Date.now()%1000):null};
   function chime(){const sr=ctx.sampleRate,n=Math.floor(sr*.9),b=ctx.createBuffer(1,n,sr),d=b.getChannelData(0);
     for(let i=0;i<n;i++){const t=i/sr,hi=t>=.3,s=hi?t-.3:t;d[i]=Math.sin(2*Math.PI*(hi?1320:880)*s)*Math.exp(-s*7)*.45}return b}
   /* 提示音直接內嵌（單聲道 wav，約 16 KB），不靠另外下載檔案；解不開才用內建的兩聲叮 */
@@ -1590,9 +1602,9 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     if(ctx.state!=='running'){try{await ctx.resume()}catch(e){}}
     if(ctx.state!=='running'){label();return}
     await load();if(test)play(ctx.currentTime+.05);
-    clearInterval(iv);iv=setInterval(tick,15e3);tick();
+    clearInterval(iv);iv=setInterval(tick,15e3);tick();clearTimeout(clk);loop();
   }
-  function stop(){clearInterval(iv);iv=null;live.forEach(s=>{try{s.stop()}catch(e){}});live=[];done.clear();label()}
+  function stop(){clearInterval(iv);iv=null;clearTimeout(clk);clk=null;live.forEach(s=>{try{s.stop()}catch(e){}});live=[];done.clear();label()}
   btn.addEventListener('click',()=>{
     if(on&&ctx&&ctx.state!=='running'){start(true);return}
     on=!on;try{localStorage.setItem('mj-bell',on?'1':'0')}catch(e){}
