@@ -169,6 +169,7 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .chk-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
 .chk-cat{font-size:13px;font-weight:600;color:var(--warn);letter-spacing:.04em;padding:10px 0 2px}
 .chk-cat+.check{border-top:0}
+.chk-span{grid-column:1/-1;padding:0 2px}
 .chk-col{align-content:start}
 .chk-col{background:rgba(255,255,255,.55);border:1px solid rgba(184,112,13,.2);border-radius:10px;padding:2px 14px}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chk-col{background:rgba(255,255,255,.035)}}
@@ -1148,7 +1149,12 @@ function fillChecks(ck){
     nav.append(pv,h('span','prog',`第 ${CHKPAGE+1} / ${pages} 頁`),nx);mid.append(nav)}
   if(DB){const ed=h('button','linkbtn','編輯');ed.type='button';ed.addEventListener('click',()=>{CHKEDIT=CHKTXT||DEFAULT_CHK_TEXT;fillChecks(ck)});acts.append(ed)}
   const list=h('div','chk-cols');
-  for(const blk of (PG[CHKPAGE]||[])){const col=h('div','checks chk-col');list.append(col);if(blk.cat)col.append(h('div','chk-cat',blk.cat));
+  /* 這頁只有一個區塊（例如「#」分類後接「===」）：把它的規則平均分到各欄，分類名稱橫跨在上面 */
+  let blks=PG[CHKPAGE]||[];
+  if(blks.length===1&&blks[0].items.length>1){const b=blks[0],L=b.items.length,n=Math.min(CHK_BLOCKS,L);blks=[];
+    if(b.cat)list.append(h('div','chk-cat chk-span',b.cat));
+    for(let k=0;k<n;k++)blks.push({cat:'',items:b.items.slice(Math.round(k*L/n),Math.round((k+1)*L/n))})}
+  for(const blk of blks){const col=h('div','checks chk-col');list.append(col);if(blk.cat)col.append(h('div','chk-cat',blk.cat));
   blk.items.forEach(([id,tt,ds],k)=>{const lb=h('label','check');lb.htmlFor='chk-'+id;const cb=document.createElement('input');cb.type='checkbox';cb.id='chk-'+id;cb.disabled=!DB;
     const sp2=h('span',null,tt);ds.forEach(d=>sp2.append(h('small',null,d)));lb.append(cb,sp2);
     cb.addEventListener('change',()=>{PRE={...(PRE||{}),checks:{...((PRE||{}).checks||{}),[id]:cb.checked}};applyPre();savePre()});col.append(lb)})}
