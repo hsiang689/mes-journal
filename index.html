@@ -194,7 +194,7 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .prog{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
 .obs-float{position:fixed;right:16px;bottom:16px;z-index:60;display:none}
 .obs-float .obs-hd,.obs-float textarea{display:none}
-.obs-float.open{width:min(620px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:10px 12px 12px;display:grid;gap:8px}
+.obs-float.open{box-sizing:border-box;width:min(740px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:10px 12px 12px;display:grid;gap:8px}
 .obs-float.open .obs-hd{display:flex;align-items:baseline;gap:10px;cursor:move;user-select:none;touch-action:none}.obs-hd h2{margin:0;font-size:14px;flex:1}
 .obs-float.open textarea{display:block;width:100%;box-sizing:border-box;height:min(42vh,420px);resize:vertical;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .obs-float.open textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
@@ -1137,7 +1137,7 @@ let PRE=null,preChain=Promise.resolve(),preDirty=false;
 function curBarNo(){const o={};new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).forEach(p=>o[p.type]=p.value);const m=+o.hour%24*60+ +o.minute-570;return o.weekday!=='Sat'&&o.weekday!=='Sun'&&m>=0&&m<400?Math.floor(m/5)+1:0}
 function preSt(t){['preSt','biasSt'].forEach(id=>{const s=$(id);if(s)s.textContent=t})}
 function savePre(){if(!DB)return;const body={date:TODAY,checks:{...((PRE||{}).checks||{})},plan:String((PRE||{}).plan||''),bias:String((PRE||{}).bias||''),biasNote:String((PRE||{}).biasNote||''),trendKind:String((PRE||{}).trendKind||''),rangeKind:String((PRE||{}).rangeKind||''),cycleAge:String((PRE||{}).cycleAge||''),trend90:String((PRE||{}).trend90||''),trend300:String((PRE||{}).trend300||''),updatedAt:new Date().toISOString()};preSt('儲存中…');preChain=preChain.then(()=>DB.doc('premarket/'+TODAY).set(body)).then(()=>preSt('已儲存')).catch(()=>preSt('儲存失敗，稍後再試'))}
-function applyPre(){{const bv0=(PRE&&PRE.bias)||'';document.querySelectorAll('.bq-if-trend').forEach(x=>x.hidden=!(bv0==='多頭'||bv0==='空頭'));document.querySelectorAll('.bq-if-range').forEach(x=>x.hidden=bv0!=='區間');const kd=(bv0==='多頭'||bv0==='空頭')?(PRE&&PRE.trendKind):bv0==='區間'?(PRE&&PRE.rangeKind):'';document.querySelectorAll('.bq-if-kind').forEach(x=>x.hidden=!kd)}/* 選了 ① 才顯示 ②，選了 ② 才顯示 ③ */document.querySelectorAll('.bq-opt').forEach(b=>{const on=((PRE&&PRE[b.dataset.k])||'')===b.dataset.v;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('preObs');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v)bn.value=v}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=n>=CHECKS.length?`${n} / ${CHECKS.length} 全部複習過了`:`${n} / ${CHECKS.length} 已複習`;}
+function applyPre(){{const bv0=(PRE&&PRE.bias)||'';document.querySelectorAll('.bq-if-trend').forEach(x=>x.hidden=!(bv0==='多頭'||bv0==='空頭'));document.querySelectorAll('.bq-if-range').forEach(x=>x.hidden=bv0!=='區間');const kd=(bv0==='多頭'||bv0==='空頭')?(PRE&&PRE.trendKind):bv0==='區間'?(PRE&&PRE.rangeKind):'';document.querySelectorAll('.bq-if-kind').forEach(x=>x.hidden=!kd)}/* 選了 ① 才顯示 ②，選了 ② 才顯示 ③ */document.querySelectorAll('.bq-opt').forEach(b=>{const on=((PRE&&PRE[b.dataset.k])||'')===b.dataset.v;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});const bv=(PRE&&PRE.bias)||'';document.querySelectorAll('.bias-opt').forEach(b=>{const on=b.dataset.v===bv;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)});{const bn=$('preObs');if(bn&&document.activeElement!==bn){const v=String((PRE&&PRE.biasNote)||'');if(bn.value!==v){bn.value=v;const fb=$('obsFloat');if(fb&&fb.fit)fb.fit()}}}const c=(PRE&&PRE.checks)||{};let n=0;CHECKS.forEach(([id])=>{const cb=$('chk-'+id);if(cb){cb.checked=!!c[id];cb.closest('.check').classList.toggle('done',!!c[id])}if(c[id])n++});const p=$('preProg');if(p)p.textContent=n>=CHECKS.length?`${n} / ${CHECKS.length} 全部複習過了`:`${n} / ${CHECKS.length} 已複習`;}
 function markSize(text,parent){const re=/(艙位|倉位|口數|\d+\s*口)/g;let last=0,m;while((m=re.exec(text))){if(m.index>last)parent.append(document.createTextNode(text.slice(last,m.index)));parent.append(h('mark',null,m[0]));last=m.index+m[0].length}if(last<text.length)parent.append(document.createTextNode(text.slice(last)))}
 function fillChecks(ck){
   ck.replaceChildren();
@@ -1195,7 +1195,11 @@ function ensureObs(){
     const ta=document.createElement('textarea');ta.id='preObs';ta.spellcheck=false;let tmr=null;
     ta.placeholder='盤前：背景＋多空兩個劇本，各寫一句「看到什麼代表這邊錯了」。\n盤中：看到什麼就寫一行。按 Enter 換行會自動加上現在的棒號（例如 #23），Shift＋Enter 換行不加。';
     ta.setAttribute('aria-label','觀察紀錄');
-    ta.addEventListener('input',()=>{preSt('未儲存');clearTimeout(tmr);tmr=setTimeout(()=>{PRE={...(PRE||{}),biasNote:ta.value};savePre()},900)});
+    /* 寬度跟著最長的一行變寬：至少 740，最多到螢幕寬（量字寬用 canvas） */
+    const meas=document.createElement('canvas').getContext('2d');
+    box.fit=()=>{if(!box.classList.contains('open'))return;const cs=getComputedStyle(ta);meas.font=`${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;let w=0;ta.value.split('\n').forEach(l=>{w=Math.max(w,meas.measureText(l).width)});
+      const W=Math.round(Math.min(innerWidth-32,Math.max(740,w+96)));if(box.style.width!==W+'px'){box.style.width=W+'px';if(box.style.left){const r=box.getBoundingClientRect();place(r.left,r.top)}}};
+    ta.addEventListener('input',()=>{box.fit();preSt('未儲存');clearTimeout(tmr);tmr=setTimeout(()=>{PRE={...(PRE||{}),biasNote:ta.value};savePre()},900)});
     ta.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();setOpen(false);return}if(e.key!=='Enter'||e.shiftKey||e.isComposing||e.keyCode===229)return;const n=curBarNo();if(!n)return;
       e.preventDefault();const a0=ta.selectionStart,b0=ta.selectionEnd;ta.setRangeText('\n#'+n+' ',a0,b0,'end');ta.dispatchEvent(new Event('input'))});
     ta.addEventListener('focus',()=>{const n=curBarNo();if(n&&!ta.value.trim()){ta.value='#'+n+' ';ta.setSelectionRange(ta.value.length,ta.value.length);ta.dispatchEvent(new Event('input'))}});
@@ -1210,13 +1214,13 @@ function ensureObs(){
     hd.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;const r=box.getBoundingClientRect();drag={dx:e.clientX-r.left,dy:e.clientY-r.top};hd.setPointerCapture(e.pointerId);e.preventDefault()});
     hd.addEventListener('pointermove',e=>{if(drag)drag.p=place(e.clientX-drag.dx,e.clientY-drag.dy)});
     hd.addEventListener('pointerup',()=>{if(drag&&drag.p){try{localStorage.setItem('mj-obs-pos',JSON.stringify(drag.p))}catch(e){}}drag=null});
-    addEventListener('resize',restore);
-    const setOpen=o=>{box.classList.toggle('open',o);pill.classList.toggle('on',o);pill.setAttribute('aria-pressed',o);restore();try{localStorage.setItem('mj-obs',o?'1':'0')}catch(e){}if(o)requestAnimationFrame(()=>{ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ta.scrollTop=ta.scrollHeight});else pill.focus()};
+    addEventListener('resize',()=>{restore();box.fit()});
+    const setOpen=o=>{box.classList.toggle('open',o);pill.classList.toggle('on',o);pill.setAttribute('aria-pressed',o);restore();box.fit();try{localStorage.setItem('mj-obs',o?'1':'0')}catch(e){}if(o)requestAnimationFrame(()=>{ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ta.scrollTop=ta.scrollHeight});else pill.focus()};
     mini.addEventListener('click',()=>setOpen(false));pill.addEventListener('click',()=>setOpen(!box.classList.contains('open')));
     box.append(hd,ta);document.body.append(box);
     let o=true;try{o=localStorage.getItem('mj-obs')!=='0'}catch(e){}box.classList.toggle('open',o);pill.classList.toggle('on',o);pill.setAttribute('aria-pressed',o);requestAnimationFrame(restore);
   }
-  const ta=$('preObs');ta.disabled=!DB;if(document.activeElement!==ta){const v=String((PRE||{}).biasNote||'');if(ta.value!==v)ta.value=v}
+  const ta=$('preObs');ta.disabled=!DB;if(document.activeElement!==ta){const v=String((PRE||{}).biasNote||'');if(ta.value!==v)ta.value=v}box.fit()
 }
 function renderPre(){
   const body=$('preBody');
