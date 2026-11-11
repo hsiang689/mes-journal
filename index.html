@@ -163,9 +163,12 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .quote{display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;padding:8px 0;border-top:1px solid var(--grid);font-size:13px}
 .quote:first-of-type{border-top:0}
 .quote .qn{font-family:var(--f-num);font-size:18px;line-height:1.2;color:var(--ink-3)}
-.quote .qt{white-space:pre-wrap;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+.quote .obs-list{margin-top:10px}.obs-list h3{font-size:13px;margin:0 0 4px;color:var(--ink-2)}.obs-mk{cursor:pointer}.obs-mk:focus{outline:none}.obs-mk:focus-visible rect{stroke:var(--ink);stroke-width:1.5}
+.obs-pop{position:fixed;z-index:70;max-width:min(420px,calc(100vw - 16px));background:var(--panel);color:var(--ink);border:1px solid var(--warn);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:8px 12px;font-size:13px;line-height:1.6;white-space:pre-wrap}.obs-pop b{display:block;color:var(--warn);margin-bottom:2px}
+.qt{white-space:pre-wrap;color:var(--ink);min-width:0;overflow-wrap:anywhere}
 .quote mark{background:transparent;color:var(--bear);font-weight:500}
 .checks{display:grid;gap:2px}
+.src-row{display:flex;justify-content:flex-end;margin:6px 0 0}
 .src-tag{font-size:12px;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:0 6px;line-height:18px;white-space:nowrap}
 .chk-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
 .chk-cat{font-size:13px;font-weight:600;color:var(--warn);letter-spacing:.04em;padding:10px 0 2px}
@@ -531,6 +534,7 @@ const fmt=v=>Number(v).toFixed(2);
 const money=v=>(v<0?'-':'+')+'$'+Math.abs(Number(v)).toFixed(2);
 const h=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 let showPrev=true;try{showPrev=localStorage.getItem('journal-prev')!=='0'}catch(e){}
+let showObs=true;try{showObs=localStorage.getItem('journal-obs')!=='0'}catch(e){}
 let DB=null,DAYS={},CUR=null,REV={},RULES=null,CASES=[],MEMO={},showAll=false,active=null,groups=[];
 
 /* tabs */
@@ -540,25 +544,50 @@ TABS.forEach(([t])=>$(t).addEventListener('click',()=>showTab(t)));
 try{const t=localStorage.getItem('journal-tab');if(t&&$(t))showTab(t)}catch(e){}
 
 /* chart */
+/* 觀察紀錄 → 圖上的標記：「#數字」開頭的行是一則（可以一次寫好幾個棒號，例如「#10 #11 空」），
+   後面沒有 # 的行接在同一則裡；第一個 # 之前的（盤前寫的）不標 */
+function obsNotes(date){const txt=String(((PREALL||{})[date]||{}).biasNote||''),out=[];let cur=null;
+  txt.split(/\r?\n/).forEach(l=>{const m=l.match(/^\s*((?:[#＃]\s*\d+[\s,，、]*)+)(.*)$/);
+    if(m){cur={bars:[...m[1].matchAll(/\d+/g)].map(x=>+x[0]).filter(n=>n>=1&&n<=200),text:m[2].trim()};if(cur.bars.length)out.push(cur);else cur=null;return}
+    if(cur&&l.trim())cur.text+=(cur.text?'\n':'')+l.trim()});
+  out.forEach((o,i)=>o.n=i+1);return out}
+/* 點旗子跳出的小框：顯示那則觀察；點別處、Esc、捲動就關 */
+function obsPop(anchor,o){document.querySelectorAll('.obs-pop').forEach(x=>x.remove());
+  const r=anchor.getBoundingClientRect(),p=h('div','obs-pop');p.setAttribute('role','dialog');
+  p.append(h('b',null,o.n+'．'+o.bars.map(b=>'#'+b).join(' ')),h('div',null,o.text||'（沒寫內容）'));document.body.append(p);
+  const w=p.offsetWidth;p.style.left=Math.max(8,Math.min(innerWidth-w-8,r.left))+'px';p.style.top=(r.top+20)+'px';
+  const close=()=>{p.remove();removeEventListener('click',close,true);removeEventListener('keydown',esc,true);removeEventListener('scroll',close,true)},esc=e=>{if(e.key==='Escape')close()};
+  setTimeout(()=>{addEventListener('click',close,true);addEventListener('keydown',esc,true);addEventListener('scroll',close,true)},0)}
 function drawChart(svg,day,hov){
   svg.replaceChildren();
   const el=(t,a,txt,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;(p||svg).appendChild(e);return e};
   const PREV=(showPrev&&day.prevBars)||[],off=PREV.length?PREV.length+2:0,BARS=day.bars||[],FILLS=day.fills||[],POS=day.pos||[],LEVELS=day.levels||[],openMin=day.openMin??(21*60+30);
   const tlabel=m=>{const t=openMin+m,hh=Math.floor(t/60)%24;return hh+':'+String(t%60).padStart(2,'0')};
-  const L=58,R=900,T=14,B=392,PT=448,PB=556,ND=Math.max(BARS.length,78),N=off+ND,w=(R-L)/N;
+  /* 最上方留兩排：第 1 排觀察旗子、第 2 排滑過 K 棒的棒號，都不蓋到 K 棒 */
+  const L=58,R=900,T=44,B=392,PT=448,PB=556,ND=Math.max(BARS.length,78),N=off+ND,w=(R-L)/N;
   let lo=Infinity,hi=-Infinity;PREV.concat(BARS).forEach(b=>{lo=Math.min(lo,b[2]);hi=Math.max(hi,b[1])});LEVELS.forEach(([p])=>{lo=Math.min(lo,p);hi=Math.max(hi,p)});FILLS.forEach(x=>{lo=Math.min(lo,x[3],x[5]);hi=Math.max(hi,x[3],x[5])});lo-=3;hi+=3;
   const X=m=>L+w*(off+m/5),XT=m=>X(Math.max(0,Math.min(m,ND*5))),XB=i=>L+w*(off+i)+w/2,XP=i=>L+w*i+w/2,Y=p=>T+(hi-p)/(hi-lo)*(B-T);
   const step=(hi-lo)>140?20:10;
+  /* EMA 可能超出價格範圍（例如沒顯示前一日、開盤跳空很大），裁在 K 線區內，不要畫進下面的損益圖 */
+  {const cp=el('clipPath',{id:'kClip'});el('rect',{x:L,y:T,width:R-L,height:B-T},null,cp)}
   for(let p=Math.ceil(lo/step)*step;p<=hi;p+=step){el('line',{x1:L,x2:R,y1:Y(p),y2:Y(p),stroke:'var(--grid)'});el('text',{x:L-6,y:Y(p)+4,'text-anchor':'end','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},p)}
   LEVELS.forEach(([p,t])=>{el('line',{x1:L,x2:R,y1:Y(p),y2:Y(p),stroke:'var(--level)','stroke-dasharray':'4 3'});el('text',{x:R+6,y:Y(p)+4,'font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},t+' '+p)});
   if(PREV.length){PREV.forEach((b,i)=>{const up=b[3]>=b[0],c=up?'var(--bull)':'var(--bear)',x=XP(i);el('line',{x1:x,x2:x,y1:Y(b[1]),y2:Y(b[2]),stroke:c,opacity:.6});el('rect',{x:x-w*.34,y:Y(Math.max(b[0],b[3])),width:w*.68,height:Math.max(1,Math.abs(Y(b[0])-Y(b[3]))),fill:c,opacity:.6})});
-    if(PREV[0].length>4)el('polyline',{points:PREV.map((b,i)=>XP(i)+','+Y(b[4])).join(' '),fill:'none',stroke:'var(--ema)','stroke-width':1.6,'stroke-linejoin':'round'});
+    if(PREV[0].length>4)el('polyline',{points:PREV.map((b,i)=>XP(i)+','+Y(b[4])).join(' '),fill:'none',stroke:'var(--ema)','stroke-width':1.6,'stroke-linejoin':'round','clip-path':'url(#kClip)'});
     const sx=L+w*(off-1);el('line',{x1:sx,x2:sx,y1:T,y2:B,stroke:'var(--line)','stroke-dasharray':'2 3'});
     for(let i=0;i<PREV.length;i+=12){el('text',{x:XP(i),y:B+14,'text-anchor':'middle','font-size':10,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},'#'+(i+1)+' '+tlabel(i*5))}}
   BARS.forEach((b,i)=>{const up=b[3]>=b[0],c=up?'var(--bull)':'var(--bear)',x=XB(i);el('line',{x1:x,x2:x,y1:Y(b[1]),y2:Y(b[2]),stroke:c,opacity:.6});el('rect',{x:x-w*.34,y:Y(Math.max(b[0],b[3])),width:w*.68,height:Math.max(1,Math.abs(Y(b[0])-Y(b[3]))),fill:c,opacity:.6})});
-  if(BARS.length&&BARS[0].length>4)el('polyline',{points:BARS.map((b,i)=>XB(i)+','+Y(b[4])).join(' '),fill:'none',stroke:'var(--ema)','stroke-width':1.6,'stroke-linejoin':'round'});
+  if(BARS.length&&BARS[0].length>4)el('polyline',{points:BARS.map((b,i)=>XB(i)+','+Y(b[4])).join(' '),fill:'none',stroke:'var(--ema)','stroke-width':1.6,'stroke-linejoin':'round','clip-path':'url(#kClip)'});
   const cx=X(78*5);el('line',{x1:cx,x2:cx,y1:T,y2:B,stroke:'var(--line)'});el('text',{x:cx+3,y:T+10,'font-size':10,fill:'var(--ink-3)'},'收盤');
   if(day.stopMin!=null){const sx=X(day.stopMin);el('line',{x1:sx,x2:sx,y1:T,y2:B,stroke:'var(--bear)','stroke-width':1,opacity:.75});el('line',{x1:sx,x2:sx,y1:PT,y2:PB,stroke:'var(--bear)','stroke-width':1,opacity:.75});el('text',{x:sx+3,y:T+10,'font-size':10,fill:'var(--bear)'},(day.stopLabel||'規則觸發'))}
+  /* 觀察紀錄的標記：頂端的小旗子（數字對應下方清單），滑過看內容 */
+  /* 觀察紀錄的旗子：全部排在最上方同一排（靠太近就往右挪），點旗子才顯示內容；同一則的每個棒號都畫一條虛線 */
+  const OMK=[];let lastX=-1e9;const YF=1;
+  (showObs?obsNotes(day.date):[]).forEach(o=>{const bs=o.bars.filter(bn=>bn<=ND);if(!bs.length)return;const g=el('g',{class:'obs-mk',tabindex:0,role:'button','aria-label':'觀察紀錄第 '+o.n+' 則'});OMK.push(g);
+    bs.forEach(bn=>{const x=XB(bn-1);el('line',{x1:x,x2:x,y1:YF+17,y2:B,stroke:'var(--warn)','stroke-width':1,'stroke-dasharray':'1 3',opacity:.8,'pointer-events':'none'},null,g);});
+    const x0=XB(bs[0]-1),bx=Math.min(R-8,Math.max(x0,lastX+18));lastX=bx;
+    el('rect',{x:bx-8,y:YF,width:16,height:15,rx:3,fill:'var(--warn)'},null,g);el('text',{x:bx,y:YF+11,'text-anchor':'middle','font-size':10,'font-weight':600,fill:'var(--panel)','pointer-events':'none'},o.n,g);
+    const open=e=>{e.stopPropagation();obsPop(g,o)};g.addEventListener('click',open);g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open(e)}})});
   for(let i=0;i<ND;i+=(off?12:6)){el('text',{x:XB(i),y:B+14,'text-anchor':'middle','font-size':10,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},'#'+(i+1)+' '+tlabel(i*5))}
   const gs=POS.map((p,k)=>el('g',{'data-pos':k}));
   FILLS.forEach(f=>{const [k,s,em,ep,xm,xp]=f,g=gs[k];if(!g)return;const net=POS[k][4],col=net>=0?'var(--bull)':'var(--bear)';
@@ -579,8 +608,8 @@ function drawChart(svg,day,hov){
   POS.forEach((p,k)=>{const f=FILLS.find(f=>f[0]===k);if(f)el('circle',{cx:XT(f[4]),cy:PY(p[5]),r:2.5,fill:p[4]>=0?'var(--bull)':'var(--bear)'})});
   PREV.forEach((b,i)=>{const r=el('rect',{x:L+w*i,y:T,width:w,height:B-T,fill:'transparent'});r.addEventListener('mouseenter',()=>{tip(XP(i),`#${i+1}　${tlabel(i*5)}`);hov.textContent=`#${i+1} ${tlabel(i*5)}  開 ${fmt(b[0])} 高 ${fmt(b[1])} 低 ${fmt(b[2])} 收 ${fmt(b[3])}`})});
   BARS.forEach((b,i)=>{const r=el('rect',{x:L+w*(off+i),y:T,width:w,height:B-T,fill:'transparent'});r.addEventListener('mouseenter',()=>{tip(XB(i),`#${i+1}　${tlabel(i*5)}`);hov.textContent=`#${i+1} ${tlabel(i*5)}  開 ${fmt(b[0])} 高 ${fmt(b[1])} 低 ${fmt(b[2])} 收 ${fmt(b[3])}${b.length>4?'  EMA '+fmt(b[4]):''}`})});
-  gs.forEach(g=>svg.appendChild(g));
-  const tg=el('g',{'pointer-events':'none',visibility:'hidden'}),tl=el('line',{y1:T,y2:B,stroke:'var(--ink-3)','stroke-width':1,'stroke-dasharray':'2 2'},null,tg),tr=el('rect',{y:T-2,height:18,rx:4,fill:'var(--ink)'},null,tg),tt=el('text',{y:T+11,'text-anchor':'middle','font-size':11,'font-weight':500,'font-family':'var(--f-mono)',fill:'var(--bg)'},'',tg);
+  gs.forEach(g=>svg.appendChild(g));OMK.forEach(g=>svg.appendChild(g));  /* 旗子放最上層，才滑得到 */
+  const tg=el('g',{'pointer-events':'none',visibility:'hidden'}),tl=el('line',{y1:39,y2:B,stroke:'var(--ink-3)','stroke-width':1,'stroke-dasharray':'2 2'},null,tg),tr=el('rect',{y:21,height:18,rx:4,fill:'var(--ink)'},null,tg),tt=el('text',{y:34,'text-anchor':'middle','font-size':11,'font-weight':500,'font-family':'var(--f-mono)',fill:'var(--bg)'},'',tg);
   function tip(x,label){tt.textContent=label;const wd=label.length*6.6+12,cxx=Math.min(R-wd/2,Math.max(L+wd/2,x));tl.setAttribute('x1',x);tl.setAttribute('x2',x);tr.setAttribute('x',cxx-wd/2);tr.setAttribute('width',wd);tt.setAttribute('x',cxx);tg.setAttribute('visibility','visible')}
   svg.addEventListener('mouseleave',()=>tg.setAttribute('visibility','hidden'));
   return gs;
@@ -619,9 +648,16 @@ function renderDay(){
   const lg=h('div','legend');lg.innerHTML='<span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--bull)"></i>買進</span><span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--bear)"></i>放空</span><span><i style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ink-2);background:var(--panel)"></i>出場</span><span><i style="width:14px;height:2px;background:var(--ema);vertical-align:3px"></i>20 EMA</span><span><i style="width:14px;border-top:1px dashed var(--level);vertical-align:3px"></i>前日與夜盤價位</span>';
   const hov=h('span','hover','滑過 K 棒看開高低收');
   if((day.prevBars||[]).length){const tg=h('label','tog');tg.htmlFor='showPrev';const pc=document.createElement('input');pc.type='checkbox';pc.id='showPrev';pc.checked=showPrev;tg.append(pc,document.createTextNode('顯示前一日'));pc.addEventListener('change',()=>{showPrev=pc.checked;try{localStorage.setItem('journal-prev',showPrev?'1':'0')}catch(e){}renderDay()});lg.append(tg)}
+  /* 觀察紀錄的旗子開關（這天有寫 # 棒號才出現） */
+  if(obsNotes(day.date).length){const tg=h('label','tog');tg.htmlFor='showObs';const oc=document.createElement('input');oc.type='checkbox';oc.id='showObs';oc.checked=showObs;tg.append(oc,document.createTextNode('顯示觀察紀錄'));oc.addEventListener('change',()=>{showObs=oc.checked;try{localStorage.setItem('journal-obs',showObs?'1':'0')}catch(e){}renderDay()});lg.append(tg)}
   /* K 線來源：收盤 8 小時內是 Yahoo 的暫時資料，之後自動換成 Databento */
-  if(day.barsSrc==='yahoo'&&(day.bars||[]).length){const st=h('span','src-tag',day.barsPartial?'資料來源：Yahoo（盤中，還沒到齊）':'資料來源：Yahoo（暫時）');st.title='收盤 8 小時後會自動換成 Databento（CME 原始資料），價位可能差一兩點';lg.append(st)}
-  lg.prepend(hov);lg.classList.add('top');cp.append(lg,ch);
+  let SRCT=null;
+  if(day.barsSrc==='yahoo'&&(day.bars||[]).length){const st=h('span','src-tag',day.barsPartial?'資料來源：Yahoo（盤中，還沒到齊）':'資料來源：Yahoo（暫時）');st.title='收盤 8 小時後會自動換成 Databento（CME 原始資料），價位可能差一兩點';SRCT=st}
+  lg.prepend(hov);lg.classList.add('top');cp.append(lg);
+  /* 資料來源標籤固定在圖例下方自己一排（不會因為圖例長短跑到同一排） */
+  if(SRCT){const sr=h('div','src-row');sr.append(SRCT);cp.append(sr)}cp.append(ch);
+  {const ob=obsNotes(day.date);if(ob.length){const ol=h('div','obs-list');ol.append(h('h3',null,'當天的觀察紀錄（數字對應圖上的旗子）'));
+    ob.forEach(o=>{const r=h('div','quote');r.append(h('span','qn',String(o.n)));const t=h('span','qt');t.append(h('b',null,o.bars.map(b=>'#'+b).join(' ')+'　'),document.createTextNode(o.text));r.append(t);ol.append(r)});cp.append(ol)}}
   split.append(cp,led);wrap.append(split);
   if((day.bars||[]).length)groups=drawChart(svg,day,hov);else{groups=[];cp.replaceChildren(barsPlaceholder(day))}
   groups.forEach((g,k)=>{g.style.cursor='pointer';g.addEventListener('click',()=>{focusPos(k);const r=list.querySelector(`.row[data-k="${k}"]`);if(r&&active===k)r.scrollIntoView({block:'nearest'})})});
