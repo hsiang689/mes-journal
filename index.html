@@ -344,7 +344,7 @@ button.cx-wh[aria-pressed="false"]{opacity:.38;filter:grayscale(1);text-decorati
 .cx-av.duck{background:#fff4c2}
 .cx-av.bull{background:var(--bull)}
 .cx-av.bear{background:var(--bear)}
-.cx-av.ctr{background:var(--warn)}.cx-av.sum{background:var(--ink-2)}.cx-m.sum .cx-bub{border-color:var(--ink-3)}.cx-m.sum .cx-name{color:var(--ink)}.cx-lean b{font-size:15px;margin-right:2px}
+.cx-av.ctr{background:var(--warn)}.cx-av.sum{background:var(--ink-2)}.cx-m.sum .cx-bub{border-color:var(--ink-3)}.cx-m.sum .cx-name{color:var(--ink)}.cx-lean b{font-size:15px;margin-right:2px}.cx-ovl{display:grid;gap:4px;padding-top:6px;border-top:1px solid var(--grid)}.cx-ovl img{width:100%;max-width:640px;border-radius:6px;border:1px solid var(--line);cursor:zoom-in}
 .cx-bub{background:var(--bg);border:1px solid var(--grid);border-radius:12px;padding:8px 12px;display:grid;gap:4px;min-width:0}
 .cx-m.me .cx-bub{background:var(--warn-bg);border-color:transparent}
 .cx-m.ctr .cx-bub{border-color:var(--warn)}
@@ -1453,7 +1453,7 @@ ${k==='ctr'?'只回覆 JSON：{"say":"你反駁的話","warn":["違反或接近�
     if(!CUR.msgs.some(m=>m.r==='a')){st.textContent='先讓大家回覆一輪，再輸入「統整」';return}
     if(!(await ready()))return;
     ta.value='';st.textContent='';lock(true);if(TTS)TTS.cancel();
-    CUR.msgs.push({r:'u',t,to:'sum',at:iso()});draw({k:'sum',t:IMG?'看圖、整理大家的看法…':'整理大家的看法…'});
+    const um={r:'u',t,to:'sum',at:iso()},th0=CUR;CUR.msgs.push(um);draw({k:'sum',t:IMG?'看圖、整理大家的看法…':'整理大家的看法…'});
     const p=`你是交易群組裡的「統整」。群組裡有小黃鴨（客觀）、多方、空方、反方，各自看了他的圖。現在他想要一個盤中能直接用的總結：把大家到目前為止說的話整理起來，${IMG?'再看圖確認，':''}告訴他現在偏哪一邊，以及做多、做空兩個劇本各自要看到什麼才進場。
 ${ctx()}
 他的規則：
@@ -1470,15 +1470,91 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
     try{const raw=await AI.json(p,IMG?{images:IMG,cache:false}:{cache:false});
       const side=x=>({plan:clip(x&&x.plan,200),entry:clip(x&&x.entry,200),stop:clip(x&&x.stop,120)});
       const s={lean:clip(raw&&raw.lean,8)||'觀望',why:clip(raw&&raw.why,240),long:side(raw&&raw.long),short:side(raw&&raw.short),note:clip(raw&&raw.note,240)};
-      CUR.msgs.push({r:'s',sum:s,at:iso()});draw();save();
-      if(ttsOn)speak('sum','統整。'+sumSay(s))}
-    catch(e){CUR.msgs.pop();if(!ta.value)ta.value=t;draw();st.textContent=errMsg(e)}
+      CUR.msgs.push({r:'s',sum:s,at:iso()});if(IMG)LOC.add(s);draw();save();
+      if(ttsOn)speak('sum','統整。'+sumSay(s));
+      if(IMG)locate(s,CUR)}
+    catch(e){const k=th0.msgs.indexOf(um);if(k>=0)th0.msgs.splice(k);if(!ta.value)ta.value=t;draw();st.textContent=errMsg(e)}
     lock(false);
   }
-  function sumNodes(s){const n=[];const top=el('p','cx-lean');top.append(el('b',null,s.lean||'觀望'));if(s.why)top.append(document.createTextNode('　'+s.why));n.push(top);
+  /* 找價格軸：在圖上由右往左掃一條條直的窄帶，找「灰色文字列」上下等距排列最多的那一帶（就是價格軸的刻度數字）。
+     有底色的方框（現價、委託單、High）是彩色或亮底，不算；被方框蓋掉的刻度會變成缺號，照等距推回來。
+     回傳 {rows:[{k,y}]}：k 是第幾個刻度（由上往下，含缺號），y 是像素高度 */
+  function findAxis(c,xh){
+    const W=c.width,H=c.height,D=c.getContext('2d').getImageData(0,0,W,H).data;
+    const lum=i=>.299*D[i]+.587*D[i+1]+.114*D[i+2],sat=i=>Math.max(D[i],D[i+1],D[i+2])-Math.min(D[i],D[i+1],D[i+2]);
+    let best=null;const BW=Math.max(40,Math.round(W*.03));
+    /* xh：AI 估的價格軸水平位置（0～1），只在它左右 12% 內找，避開下單面板的價格階梯 */
+    const lo=xh>0&&xh<1?Math.max(0,(xh-.12)*W):W*.4,hi=xh>0&&xh<1?Math.min(W-BW,(xh+.12)*W):W-BW;
+    for(let x0=Math.round(hi);x0>=lo;x0-=Math.max(4,Math.round(BW/6))){
+      /* 這一帶的背景亮度：取中位數 */
+      const sm=[];for(let y=0;y<H;y+=7)for(let x=x0;x<x0+BW;x+=5)sm.push(lum((y*W+x)*4));sm.sort((p,q)=>p-q);const bg=sm[sm.length>>1];
+      const ink=new Uint16Array(H),fill=new Uint16Array(H);
+      for(let y=0;y<H;y++)for(let x=x0;x<x0+BW;x++){const i=(y*W+x)*4,l=lum(i),s=sat(i);if(Math.abs(l-bg)>55){if(s<40)ink[y]++;else fill[y]++}}
+      /* 連續有字的列合成一塊：高 5～24 像素、灰字多、彩色少 */
+      const blobs=[];let y=0;
+      while(y<H){if(ink[y]<2){y++;continue}let y1=y,sumI=0,sumF=0;while(y1<H&&(ink[y1]>=2||(y1+1<H&&ink[y1+1]>=2))){sumI+=ink[y1];sumF+=fill[y1];y1++}
+        const h=y1-y;if(h>=5&&h<=24&&sumI>sumF*2&&sumI>=12)blobs.push((y+y1-1)/2);y=y1}
+      if(blobs.length<4)continue;
+      /* 等距：試每個相鄰間距當候選，數有幾塊落在 起點 + k×間距（±2 像素） */
+      for(let i=0;i<blobs.length;i++)for(let j=i+1;j<Math.min(blobs.length,i+4);j++){
+        for(let n=1;n<=3;n++){const d=(blobs[j]-blobs[i])/n;if(d<18||d>H/3)continue;
+          const byK=new Map();blobs.forEach(y=>{const k=Math.round((y-blobs[i])/d),e=Math.abs(blobs[i]+k*d-y);if(e<=2.5&&(!byK.has(k)||e<byK.get(k).e))byK.set(k,{k,y,e})});
+          const rows=[...byK.values()];
+          if(!best||rows.length>best.rows.length||(rows.length===best.rows.length&&x0>best.x0))best={x0,x1:x0+BW,d,rows}}}
+    }
+    if(!best||best.rows.length<4)return null;
+    const k0=Math.min(...best.rows.map(r=>r.k));best.rows.forEach(r=>r.k-=k0);return best;
+  }
+  /* 把 AI 讀到的刻度數字（由上往下）對上找到的刻度位置：依缺號的樣子對齊，算出 價位 → 高度（0～1） */
+  function axisMap(ax,vals,H){
+    vals=(Array.isArray(vals)?vals:[]).map(Number).filter(v=>v>0);if(!ax||vals.length<3)return null;
+    vals=[...new Set(vals)].sort((p,q)=>q-p);const df=[];for(let i=1;i<vals.length;i++)df.push(vals[i-1]-vals[i]);
+    const step=Math.min(...df);if(!(step>0)||df.some(x=>Math.abs(x/step-Math.round(x/step))>.05))return null;
+    const vi=vals.map(v=>Math.round((vals[0]-v)/step)),K=ax.rows.map(r=>r.k);
+    let bo=null,bn=0;for(let o=-6;o<=6;o++){const n=K.filter(k=>vi.includes(k-o)).length;if(n>bn){bn=n;bo=o}}
+    if(bn<3||bn<.6*Math.min(K.length,vi.length))return null;
+    /* 用對上的刻度做直線擬合：y = a + b×價位 */
+    const pts=ax.rows.filter(r=>vi.includes(r.k-bo)).map(r=>[vals[0]-(r.k-bo)*step,r.y]);
+    const n=pts.length,mp=pts.reduce((t,x)=>t+x[0],0)/n,my=pts.reduce((t,x)=>t+x[1],0)/n;let sxy=0,sxx=0;pts.forEach(([p,y])=>{sxy+=(p-mp)*(y-my);sxx+=(p-mp)**2});
+    const b=sxy/sxx,a=my-b*mp;if(!(b<0))return null;return p=>(a+b*p)/H;
+  }
+  const OVLC=new WeakMap();
+  /* 統整的價位畫在截圖上：AI 讀價格軸上的刻度數字和劇本的價位，網頁自己在圖上找刻度數字的位置來對位；對不準就不畫 */
+  function overlay(s,th){const px=s.px;if(!px||!Array.isArray(px.vals))return null;
+    const src=th.local&&th.local===IMGURL?Promise.resolve(IMGURL):th.imgId?imgSrc(th.imgId):null;if(!src)return null;
+    const box=el('div','cx-ovl'),im=el('img');im.alt='統整的價位畫在截圖上';box.append(im,el('p','cx-sub','實線進場、虛線停損、點線目標；雙擊放大'));
+    if(OVLC.has(s)){const v=OVLC.get(s);if(!v)return null;im.src=v;return box}
+    src.then(u=>new Promise((ok,no)=>{const g=new Image();g.onload=()=>ok(g);g.onerror=no;g.src=u})).then(g=>{
+      const W=g.naturalWidth,H=g.naturalHeight,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(g,0,0);
+      const ax=findAxis(c,+px.x),f=axisMap(ax,px.vals,H),XE=ax?Math.min(W,ax.x1):W;
+      if(!f){OVLC.set(s,'');box.replaceChildren(el('p','cx-sub','這張圖的價格軸對不準，這次不畫線'));return}
+      const cs=getComputedStyle(document.documentElement),G=cs.getPropertyValue('--bull').trim()||'#1f9d74',R=cs.getPropertyValue('--bear').trim()||'#d64d5b';
+      const fs=Math.max(12,Math.round(H/48));x.font=`600 ${fs}px sans-serif`;x.textBaseline='middle';
+      const line=(p,col,dash,lab,lx)=>{p=+p;if(!(p>0))return;const y=f(p)*H;if(!(y>=0&&y<=H))return;
+        x.save();x.strokeStyle=col;x.lineWidth=Math.max(1.5,H/450);x.setLineDash(dash.map(d=>d*Math.max(1,H/600)));x.beginPath();x.moveTo(0,y);x.lineTo(XE,y);x.stroke();x.restore();
+        const t=lab+' '+p,tw=x.measureText(t).width+12;x.globalAlpha=.9;x.fillStyle=col;x.fillRect(lx,y-fs*.75,tw,fs*1.5);x.globalAlpha=1;x.fillStyle='#fff';x.fillText(t,lx+6,y)};
+      /* 做多的標籤放左邊、做空的放中間偏左，避免疊在一起；實線進場、虛線停損、點線目標 */
+      [['long','多',G,W*.08],['short','空',R,W*.32]].forEach(([k,n,col,lx])=>{const v=px[k]||{};line(v.entry,col,[],n+' 進場',lx);line(v.stop,col,[10,7],n+' 停損',lx);line(v.target,col,[2,6],n+' 目標',lx)});
+      const d=c.toDataURL('image/jpeg',.9);OVLC.set(s,d);im.src=d}).catch(()=>box.remove());
+    return box}
+  const LOC=new WeakSet();
+  async function locate(s,th){
+    const p=`這是交易者的 TopstepX 截圖（MES 5 分 K）。要把下面兩個劇本的價位畫回這張圖上，請做兩件事：
+1. 找到 K 線圖右側的價格軸（不是下單面板）。x 是價格軸數字的水平位置（0＝圖片最左，1＝最右，大概就好）；vals 由上往下列出價格軸上「一般的刻度數字」（灰色字、沒有底色方框的那些，例如 7620、7610、7590），有底色的方框（現價、委託單、High、十字線）不要列。
+2. 把劇本裡的價位寫成數字：entry 進場、stop 停損、target 目標；劇本沒寫或看不出來就 null。now 是圖上的現價。
+做多：${s.long.plan}；進場：${s.long.entry}；停損：${s.long.stop}
+做空：${s.short.plan}；進場：${s.short.entry}；停損：${s.short.stop}
+只回覆 JSON：{"x":0.83,"vals":[7620,7610,7590,7580],"now":7541,"long":{"entry":7520,"stop":7514,"target":7535},"short":{"entry":7560,"stop":7566,"target":7505}}`;
+    const num=v=>{v=+v;return v>0&&v<1e6?Math.round(v*100)/100:null},lv=x=>({entry:num(x&&x.entry),stop:num(x&&x.stop),target:num(x&&x.target)});
+    try{const P=await AI.json(p,{images:IMG,cache:false});
+      if(P&&Array.isArray(P.vals))s.px={x:Math.round(+P.x*1000)/1000||0,vals:P.vals.slice(0,40).map(num).filter(Boolean),now:num(P.now),long:lv(P.long),short:lv(P.short)};
+      LOC.delete(s);if(CUR===th){draw();save();if(!s.px)st.textContent='價格軸讀不到，這次不畫線'}}
+    catch(e){LOC.delete(s);if(CUR===th){draw();st.textContent='價位沒辦法畫到圖上：'+errMsg(e)}}
+  }
+  function sumNodes(s,th){const n=[];const top=el('p','cx-lean');top.append(el('b',null,s.lean||'觀望'));if(s.why)top.append(document.createTextNode('　'+s.why));n.push(top);
     [['long','做多'],['short','做空']].forEach(([k,lab])=>{const x=s[k]||{};if(!x.plan&&!x.entry)return;const sec=el('div','cx-sec');sec.append(el('h3',null,lab));
       if(x.plan)sec.append(el('p',null,x.plan));if(x.entry)sec.append(el('p',null,'進場：'+x.entry));if(x.stop)sec.append(el('p','cx-sub','停損：'+x.stop));n.push(sec)});
-    if(s.note)n.push(el('p','cx-warn','⚠️ '+s.note));return n}
+    if(s.note)n.push(el('p','cx-warn','⚠️ '+s.note));if(LOC.has(s))n.push(el('p','cx-sub','正在把價位畫到截圖上…'));else if(th){const o=overlay(s,th);if(o)n.push(o)}return n}
 
   /* ---------- 顯示 ---------- */
   function bubble(k,nodes,at,say){
@@ -1519,7 +1595,7 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
           if(k==='ctr'){const c=m.ctr;if(!c||(!c.say&&!c.stop&&!(c.warn||[]).length))return;const n=[];if(c.stop)n.push(el('p','cx-warn','⚠️ '+c.stop));if(c.say)n.push(c.say);
             if((c.warn||[]).length){const ul=el('ul','cx-wl');c.warn.forEach(w=>ul.append(el('li','cx-warn','⚠️ '+w)));n.push(ul)}bubble('ctr',n,m.at,sayText('ctr',m));return}
           if(m[k])bubble(k,[m[k]],m.at,m[k])});return}
-      if(m.r==='s'){bubble('sum',sumNodes(m.sum||{}),m.at,sumSay(m.sum||{}));return}
+      if(m.r==='s'){bubble('sum',sumNodes(m.sum||{},CUR),m.at,sumSay(m.sum||{}));return}
       if(m.r==='c')bubble('ctr',counterNodes(m),m.at);
     });
     if(pending){const b=bubble(pending.k,[el('p','cx-sub',pending.t)]);b.classList.add('wait')}
