@@ -198,6 +198,7 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .obs-float.open .obs-hd{display:flex;align-items:baseline;gap:10px;cursor:move;user-select:none;touch-action:none}.obs-hd h2{margin:0;font-size:14px;flex:1}
 .obs-float.open textarea{display:block;width:100%;box-sizing:border-box;height:min(42vh,420px);resize:vertical;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .obs-float.open textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
+.obs-min{font:600 14px/1 var(--f-sans);width:30px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);cursor:pointer}.obs-min:hover{background:var(--grid)}.obs-min:focus-visible{outline:2px solid var(--warn)}
 .obs-btn{font:500 12px var(--f-sans);border:1px solid var(--line);background:var(--panel);color:var(--ink-3);padding:4px 10px;border-radius:8px;cursor:pointer}.obs-btn.on{background:var(--warn-bg);color:var(--ink)}.obs-btn:focus-visible{outline:2px solid var(--warn);outline-offset:1px}
 .plan textarea{width:100%;box-sizing:border-box;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
 .plan textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
@@ -1189,7 +1190,7 @@ function ensureObs(){
   let box=$('obsFloat');
   if(!box){
     box=h('section','obs-float');box.id='obsFloat';box.setAttribute('aria-label','觀察紀錄');
-    const hd=h('div','obs-hd'),ps=h('span','prog');ps.id='preSt';const mini=h('button','linkbtn','縮小');mini.type='button';
+    const hd=h('div','obs-hd'),ps=h('span','prog');ps.id='preSt';const mini=h('button','obs-min','—');mini.type='button';mini.title='縮小（Esc）';mini.setAttribute('aria-label','縮小觀察紀錄');
     hd.append(h('h2',null,'觀察紀錄'),ps,mini);
     const ta=document.createElement('textarea');ta.id='preObs';ta.spellcheck=false;let tmr=null;
     ta.placeholder='盤前：背景＋多空兩個劇本，各寫一句「看到什麼代表這邊錯了」。\n盤中：看到什麼就寫一行。按 Enter 換行會自動加上現在的棒號（例如 #23），Shift＋Enter 換行不加。';
@@ -1199,9 +1200,9 @@ function ensureObs(){
       e.preventDefault();const a0=ta.selectionStart,b0=ta.selectionEnd;ta.setRangeText('\n#'+n+' ',a0,b0,'end');ta.dispatchEvent(new Event('input'))});
     ta.addEventListener('focus',()=>{const n=curBarNo();if(n&&!ta.value.trim()){ta.value='#'+n+' ';ta.setSelectionRange(ta.value.length,ta.value.length);ta.dispatchEvent(new Event('input'))}});
     ta.addEventListener('blur',()=>{clearTimeout(tmr);if(ta.value!==String((PRE||{}).biasNote||'')){PRE={...(PRE||{}),biasNote:ta.value};savePre()}if(preDirty)setTimeout(renderPre,0)});
-    /* 開關按鈕放在標題列的 K 棒提醒旁邊（提醒開著時在音量旁邊） */
+    /* 開關按鈕放在標題列、K 棒提醒的左邊（提醒開關、音量出現與否都不會讓它跑位） */
     const pill=h('button','obs-btn','📝 觀察紀錄');pill.type='button';pill.id='obsBtn';pill.title='打開／縮小觀察紀錄';
-    const put=()=>{const bw=document.querySelector('.bell-w'),host=document.querySelector('.ttl');if(bw){if(bw.nextSibling!==pill)bw.after(pill)}else if(host&&pill.parentNode!==host)host.append(pill)};put();setTimeout(put,0);
+    const put=()=>{const bw=document.querySelector('.bell-w'),host=document.querySelector('.ttl');if(bw){if(bw.previousSibling!==pill)bw.before(pill)}else if(host&&pill.parentNode!==host)host.append(pill)};put();setTimeout(put,0);
     /* 拖曳標題列可以移動（位置會記住）；縮小時回到右下角 */
     const place=(x,y)=>{const r=box.getBoundingClientRect();x=Math.max(8,Math.min(innerWidth-r.width-8,x));y=Math.max(8,Math.min(innerHeight-r.height-8,y));Object.assign(box.style,{left:x+'px',top:y+'px',right:'auto',bottom:'auto'});return [x,y]};
     const restore=()=>{if(!box.classList.contains('open')){box.removeAttribute('style');return}try{const p=JSON.parse(localStorage.getItem('mj-obs-pos')||'null');if(p)place(p[0],p[1])}catch(e){}};
