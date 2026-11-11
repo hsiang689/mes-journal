@@ -192,15 +192,13 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .check.done{background:linear-gradient(90deg,rgba(19,137,107,.07),transparent 70%)}
 .check small{display:block;font-size:12px;color:var(--ink-3);text-decoration:none}
 .prog{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
-.obs-float{position:fixed;right:16px;bottom:16px;z-index:60}
+.obs-float{position:fixed;right:16px;bottom:16px;z-index:60;display:none}
 .obs-float .obs-hd,.obs-float textarea{display:none}
-.obs-float.open{width:min(440px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:10px 12px 12px;display:grid;gap:8px}
+.obs-float.open{width:min(620px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:10px 12px 12px;display:grid;gap:8px}
 .obs-float.open .obs-hd{display:flex;align-items:baseline;gap:10px;cursor:move;user-select:none;touch-action:none}.obs-hd h2{margin:0;font-size:14px;flex:1}
 .obs-float.open textarea{display:block;width:100%;box-sizing:border-box;height:min(42vh,420px);resize:vertical;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .obs-float.open textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
-.obs-float.open .obs-pill{display:none}
-.obs-pill{font:500 13px var(--f-sans);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 14px;box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer}
-.obs-pill:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+.obs-btn{font:500 12px var(--f-sans);border:1px solid var(--line);background:var(--panel);color:var(--ink-3);padding:4px 10px;border-radius:8px;cursor:pointer}.obs-btn.on{background:var(--warn-bg);color:var(--ink)}.obs-btn:focus-visible{outline:2px solid var(--warn);outline-offset:1px}
 .plan textarea{width:100%;box-sizing:border-box;font:14px/1.6 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
 .plan textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
 .mini{display:grid;gap:6px}
@@ -1098,7 +1096,9 @@ function biasCard(){
 
 /* pre-market */
 function todayTPE(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'})}catch(e){return new Date().toISOString().slice(0,10)}}
-const TODAY=todayTPE();
+/* 盤前紀錄的「今天」用美東日期：台灣過了午夜，美股還是同一個交易日（之前用台灣日期，半夜會跳到隔天的空白紀錄） */
+function tradeDay(){try{return new Date().toLocaleDateString('sv-SE',{timeZone:'America/New_York'})}catch(e){return todayTPE()}}
+const TODAY=tradeDay();
 const DEFAULT_CHK_TEXT=`每筆虧損出場後，先把成交紀錄傳給 Claude
 -傳資料的這段時間就是離開盤面
 
@@ -1199,7 +1199,9 @@ function ensureObs(){
       e.preventDefault();const a0=ta.selectionStart,b0=ta.selectionEnd;ta.setRangeText('\n#'+n+' ',a0,b0,'end');ta.dispatchEvent(new Event('input'))});
     ta.addEventListener('focus',()=>{const n=curBarNo();if(n&&!ta.value.trim()){ta.value='#'+n+' ';ta.setSelectionRange(ta.value.length,ta.value.length);ta.dispatchEvent(new Event('input'))}});
     ta.addEventListener('blur',()=>{clearTimeout(tmr);if(ta.value!==String((PRE||{}).biasNote||'')){PRE={...(PRE||{}),biasNote:ta.value};savePre()}if(preDirty)setTimeout(renderPre,0)});
-    const pill=h('button','obs-pill','📝 觀察紀錄');pill.type='button';pill.title='打開觀察紀錄';
+    /* 開關按鈕放在標題列的 K 棒提醒旁邊（提醒開著時在音量旁邊） */
+    const pill=h('button','obs-btn','📝 觀察紀錄');pill.type='button';pill.id='obsBtn';pill.title='打開／縮小觀察紀錄';
+    const put=()=>{const bw=document.querySelector('.bell-w'),host=document.querySelector('.ttl');if(bw){if(bw.nextSibling!==pill)bw.after(pill)}else if(host&&pill.parentNode!==host)host.append(pill)};put();setTimeout(put,0);
     /* 拖曳標題列可以移動（位置會記住）；縮小時回到右下角 */
     const place=(x,y)=>{const r=box.getBoundingClientRect();x=Math.max(8,Math.min(innerWidth-r.width-8,x));y=Math.max(8,Math.min(innerHeight-r.height-8,y));Object.assign(box.style,{left:x+'px',top:y+'px',right:'auto',bottom:'auto'});return [x,y]};
     const restore=()=>{if(!box.classList.contains('open')){box.removeAttribute('style');return}try{const p=JSON.parse(localStorage.getItem('mj-obs-pos')||'null');if(p)place(p[0],p[1])}catch(e){}};
@@ -1208,10 +1210,10 @@ function ensureObs(){
     hd.addEventListener('pointermove',e=>{if(drag)drag.p=place(e.clientX-drag.dx,e.clientY-drag.dy)});
     hd.addEventListener('pointerup',()=>{if(drag&&drag.p){try{localStorage.setItem('mj-obs-pos',JSON.stringify(drag.p))}catch(e){}}drag=null});
     addEventListener('resize',restore);
-    const setOpen=o=>{box.classList.toggle('open',o);restore();try{localStorage.setItem('mj-obs',o?'1':'0')}catch(e){}if(o)requestAnimationFrame(()=>{ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ta.scrollTop=ta.scrollHeight});else pill.focus()};
-    mini.addEventListener('click',()=>setOpen(false));pill.addEventListener('click',()=>setOpen(true));
-    box.append(pill,hd,ta);document.body.append(box);
-    let o=true;try{o=localStorage.getItem('mj-obs')!=='0'}catch(e){}box.classList.toggle('open',o);requestAnimationFrame(restore);
+    const setOpen=o=>{box.classList.toggle('open',o);pill.classList.toggle('on',o);pill.setAttribute('aria-pressed',o);restore();try{localStorage.setItem('mj-obs',o?'1':'0')}catch(e){}if(o)requestAnimationFrame(()=>{ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ta.scrollTop=ta.scrollHeight});else pill.focus()};
+    mini.addEventListener('click',()=>setOpen(false));pill.addEventListener('click',()=>setOpen(!box.classList.contains('open')));
+    box.append(hd,ta);document.body.append(box);
+    let o=true;try{o=localStorage.getItem('mj-obs')!=='0'}catch(e){}box.classList.toggle('open',o);pill.classList.toggle('on',o);pill.setAttribute('aria-pressed',o);requestAnimationFrame(restore);
   }
   const ta=$('preObs');ta.disabled=!DB;if(document.activeElement!==ta){const v=String((PRE||{}).biasNote||'');if(ta.value!==v)ta.value=v}
 }
