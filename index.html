@@ -113,6 +113,7 @@ select{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);bord
 .memo textarea{width:100%;box-sizing:border-box;font:13px/1.5 var(--f-sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;overflow:hidden;min-height:0}
 .memo textarea:focus{outline:2px solid var(--warn);outline-offset:0;border-color:transparent}
 .memo textarea:disabled{opacity:.6}
+.day-rev-h{padding:12px 14px 4px;border-top:2px solid var(--line);font-size:13px;font-weight:500;color:var(--ink)}
 .divider{padding:8px 14px;font-size:12px;color:var(--bear);background:var(--stop-bg);border-top:1px solid var(--grid)}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 .box{padding:14px 16px;display:grid;gap:8px;align-content:start}
@@ -677,16 +678,22 @@ function renderDay(){
     ta.addEventListener('input',()=>{grow(ta);clearTimeout(m.t);sst.textContent='未儲存';m.t=setTimeout(()=>saveMemo(id),900)});
     ta.addEventListener('blur',()=>{clearTimeout(m.t);saveMemo(id)});
   });
+  /* 總檢討：整天一則，存在 reviews/{日期}_day */
+  {const id=CUR+'_day',memo=h('div','memo'),ta=document.createElement('textarea'),sst=h('span','memo-st');ta.rows=3;ta.placeholder='整天的檢討：最佳進出場、下次要注意的事';ta.setAttribute('aria-label','當天的總檢討');ta.disabled=!DB;memo.append(ta,sst);list.append(h('div','day-rev-h','總檢討'),memo);
+    const m={ta,st:sst,saved:'',t:null,chain:Promise.resolve(),date:CUR,k:-1};MEMO[id]=m;
+    ta.addEventListener('input',()=>{grow(ta);clearTimeout(m.t);sst.textContent='未儲存';m.t=setTimeout(()=>saveMemo(id),900)});
+    ta.addEventListener('blur',()=>{clearTimeout(m.t);saveMemo(id)})}
   if((day.bars||[]).length&&!day.reviewedAt&&SAMPLE&&DB){
     const b=h('section','panel box');b.append(h('h2',null,'Claude 逐筆檢討'));
     const p=h('p','sub','K 線已經補上。可以請 Claude 依 K 線逐筆檢討每個部位，並列出照規則該叫停的時間點（會用你的 Anthropic API key）。');
     const row=h('div','acts');row.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap';const btn=h('button','linkbtn','請 Claude 逐筆檢討');btn.type='button';const st=h('span','sub');st.id='revSt';st.textContent=BARST[day.date]||'';
     btn.addEventListener('click',()=>runReview(day.date,btn));row.append(btn,st);b.append(p,row);wrap.append(b);
   }
-  if((day.intervene||[]).length||(day.compare||[]).length){
+  if((day.intervene||[]).length||(day.compare||[]).length||day.compareNote){
     const cols=h('div','cols');
     if((day.intervene||[]).length){const b=h('section','panel box');b.append(h('h2',null,'照規則的話，會在這些時間點叫停'));const ol=h('ol');day.intervene.forEach(([bb,t])=>{const li=h('li');li.append(h('b',null,bb),document.createTextNode('：'+t));ol.append(li)});b.append(ol);cols.append(b)}
     if((day.compare||[]).length){const b=h('section','panel box');b.append(h('h2',null,'規則與實際的比較'));const tb=h('table','cmp');day.compare.forEach(([a,v,c])=>{const tr=h('tr');tr.append(h('td',null,a),h('td',c||'',v));tb.append(tr)});b.append(tb);if(day.compareNote)b.append(h('p',null,day.compareNote));cols.append(b)}
+    else if(day.compareNote){const b=h('section','panel box');b.append(h('h2',null,'總結'),h('p',null,day.compareNote));cols.append(b)}
     wrap.append(cols);
   }
   body.append(wrap);paint();applyReviews();
