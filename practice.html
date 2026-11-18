@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>開盤練習</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<style>[hidden]{display:none!important}</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+TC:wght@400;500&family=Barlow+Condensed:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<!-- 資料：GitHub 私人 repo 的 practice/（K 線由 Actions 產生；作答和收藏也存在那裡），token 和交易日誌共用 -->
+<script>window.MJ_STORE = { colls: {
+  pbars: { dir: 'practice/bars/', lazy: true, ro: true },
+  pmeta: { file: 'practice/index.json', doc: 'index', ro: true },
+  panswers: { file: 'practice/answers.json' },
+  pfavs: { file: 'practice/favs.json' },
+} };</script>
+<script src="store.js"></script>
+<style>
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#15202b; --ink-2:#4d5b68; --ink-3:#8593a0;
+  --grid:#e2e7eb; --line:#cfd6dc; --bull:#13896b; --bear:#cf3f4f; --ema:#2b6fd6; --level:#9aa5af;
+  --sep:rgba(21,32,43,.06); --ok:#13896b; --no:#cf3f4f; --accent:#b8700d;
+  --f-sans:"IBM Plex Sans TC","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --f-num:"Barlow Condensed","IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-pt="light"]):not([data-pt="eye"]){
+  --bg:#0f1418; --panel:#161d23; --ink:#e3e8ec; --ink-2:#b6c1ca; --ink-3:#8b98a3;
+  --grid:#202a33; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96;
+  --sep:rgba(227,232,236,.06); --ok:#2fb88f; --no:#ef6b79; --accent:#e7a441; color-scheme:dark}}
+:root[data-pt="dark"]{
+  --bg:#0f1418; --panel:#161d23; --ink:#e3e8ec; --ink-2:#b6c1ca; --ink-3:#8b98a3;
+  --grid:#202a33; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96;
+  --sep:rgba(227,232,236,.06); --ok:#2fb88f; --no:#ef6b79; --accent:#e7a441; color-scheme:dark}
+:root[data-pt="eye"]{
+  --bg:#e8e3d6; --panel:#f3eee2; --ink:#37332b; --ink-2:#5c564a; --ink-3:#878070;
+  --grid:#e2dbcb; --line:#cbc1ac; --bull:#2d7a58; --bear:#b04a40; --ema:#3a64aa; --level:#9e9684;
+  --sep:rgba(55,51,43,.06); --ok:#2d7a58; --no:#b04a40; --accent:#9c5f10; color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-sans)}
+.wrap{max-width:1440px;margin:0 auto;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.themes{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.themes button{font:12px var(--f-sans);color:var(--ink-3);background:var(--panel);border:0;border-left:1px solid var(--line);padding:3px 10px;cursor:pointer}
+.themes button:first-child{border-left:0}
+.themes button[aria-pressed="true"]{color:var(--ink);background:var(--bg)}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs button{font:500 14px var(--f-sans);border:0;background:transparent;color:var(--ink-2);padding:6px 14px;border-radius:7px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.tabs button:focus-visible,.themes button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#view-stats{display:grid;gap:14px}
+#view-stats[hidden]{display:none}
+.tag.ctr{color:var(--accent)}
+.outs{margin:4px 0;padding-left:20px;font-size:14px}
+.fav.on{color:var(--accent);border-color:var(--accent)}
+#view-fav{display:grid;gap:12px}
+#view-fav[hidden]{display:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{font:13px var(--f-sans);color:var(--ink-2);background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{color:var(--bg);background:var(--ink);border-color:var(--ink)}
+.tip{cursor:help;text-decoration:underline dotted color-mix(in srgb,var(--ink-3) 60%,transparent);text-underline-offset:3px}
+th.grp{text-align:center;border-bottom:1px solid var(--line);color:var(--ink-2)}
+.favs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.favc{display:flex;flex-direction:column;gap:4px;text-align:left;font:inherit;color:var(--ink);padding:12px 14px;cursor:pointer;min-width:0}
+.favc:hover{border-color:var(--ink-3)}
+.favc:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fr{font-size:13px}
+.fdel{font-size:11px;padding:1px 8px;color:var(--ink-3)}
+.fnote{font-size:14px;color:var(--ink-2);border-top:1px solid var(--line);padding-top:6px;margin-top:4px;overflow-wrap:anywhere}
+h1{font-size:20px;font-weight:500;margin:0}
+.sub{color:var(--ink-3);font-size:13px}
+.sp{flex:1}
+.btn{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:7px 14px;cursor:pointer;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--ink-3)}
+.btn:focus-visible,.note:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.sm{font-size:12px;padding:3px 9px}
+.btn.pri{border-color:var(--accent);color:var(--accent)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.qbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.qno{font-family:var(--f-num);font-size:20px}
+.pill{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-radius:99px;padding:1px 9px;color:var(--ink-2)}
+.hint{color:var(--ink-3);font-size:13px}
+.chartbox{position:relative;height:min(68vh,680px);min-height:320px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{font:12px var(--f-sans);color:var(--ink-3);background:var(--panel);border:0;border-left:1px solid var(--line);padding:3px 10px;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{color:var(--ink);background:var(--bg)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.nextb{position:absolute;right:72px;bottom:36px;z-index:4;box-shadow:0 3px 12px rgba(0,0,0,.25);background:color-mix(in srgb,var(--panel) 92%,transparent)}
+.autob{position:absolute;right:6px;bottom:4px;z-index:3;font:11px var(--f-mono);line-height:18px;padding:0 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink-3);cursor:pointer}
+.autob.on{color:var(--accent);border-color:var(--accent)}
+#chart{position:absolute;inset:0}
+.ohlc{position:absolute;left:10px;top:6px;z-index:3;font:12px var(--f-mono);color:var(--ink-2);pointer-events:none;background:color-mix(in srgb,var(--panel) 80%,transparent);padding:1px 6px;border-radius:5px}
+.ohlc b{font-weight:500;color:var(--ink)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;padding:6px 14px;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line)}
+.legend i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+.legend i.d{border-top-style:dashed}
+.ctl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.note{flex:1;min-width:180px;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 10px}
+.plan{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:0 14px 12px;font:13px var(--f-mono);color:var(--ink-2)}
+.plan:empty{display:none}
+.tag{font:12px var(--f-sans);border:1px solid currentColor;border-radius:99px;padding:0 9px}
+.tag.bull{color:var(--bull)} .tag.bear{color:var(--bear)}
+.warn{color:var(--accent);font-family:var(--f-sans)}
+#mmb.on{border-color:var(--accent);color:var(--accent)}
+.res{position:absolute;right:72px;top:6px;z-index:4;max-width:min(620px,calc(100% - 100px));padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:color-mix(in srgb,var(--panel) 93%,transparent);box-shadow:0 4px 18px rgba(0,0,0,.25);display:none}
+.res .rtop{display:flex;align-items:flex-start;gap:8px}
+.res .rtop .verdict{flex:1;min-width:0}
+.res .rmin{font-size:12px;padding:0 8px;line-height:20px}
+.res.min .rbody{display:none}
+@media (max-width:640px){.res{left:8px;right:8px;top:auto;bottom:34px;max-width:none}}
+.res.on{display:block}
+.verdict{font-size:17px;font-weight:500}
+.verdict.ok{color:var(--ok)} .verdict.no{color:var(--no)}
+.facts{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2);margin:2px 0}
+.stats{padding:12px 14px}
+.stats h2{font-size:15px;font-weight:500;margin:0 0 8px}
+.kpis{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:10px}
+.kpi .v{font-family:var(--f-num);font-size:26px;line-height:1.1}
+.kpi .l{font-size:12px;color:var(--ink-3)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--ink-3)}
+td.n{font-family:var(--f-mono);text-align:right} th.n{text-align:right}
+.tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.scroll{overflow-x:auto}
+.ok{color:var(--ok)} .no{color:var(--no)}
+details{margin-top:12px;color:var(--ink-2);font-size:13px}
+summary{cursor:pointer;color:var(--ink-3)}
+.msg{padding:40px 16px;text-align:center;color:var(--ink-3)}
+@media (max-width:640px){.wrap{padding-block:10px}.chartbox{height:56vh}}
+</style>
+<div class="wrap">
+  <header>
+    <h1>開盤練習</h1>
+    <div class="themes" role="group" aria-label="配色"><button type="button" data-t="eye">護眼</button><button type="button" data-t="dark">深色</button><button type="button" data-t="light">淺色</button></div>
+    <span class="sp"></span>
+    <div class="tabs" role="tablist" aria-label="練習分頁">
+      <button role="tab" id="tab-play" aria-selected="true" aria-controls="view-play" type="button">練習</button>
+      <button role="tab" id="tab-fav" aria-selected="false" aria-controls="view-fav" type="button">收藏</button>
+      <button role="tab" id="tab-stats" aria-selected="false" aria-controls="view-stats" type="button">成績</button>
+    </div>
+  </header>
+
+  <div id="view-play" role="tabpanel" aria-labelledby="tab-play">
+    <div class="card" id="main">
+      <div class="msg" id="loading">載入中…</div>
+    </div>
+  </div>
+  <div id="view-stats" role="tabpanel" aria-labelledby="tab-stats" hidden></div>
+  <div id="view-fav" role="tabpanel" aria-labelledby="tab-fav" hidden></div>
+
+  <details id="rules">
+    <summary>MM 和結果怎麼算</summary>
+    <p><b>畫 MM</b>：和 TradingView 的斐波那契回撤一樣，級數改成 -1、0、0.5、1、2、3、4。按「畫 MM」（或 M 鍵），在圖上先點 <b>0</b>、再點 <b>1</b>（0→1 是一段走勢；往上畫是做多、往下畫是做空），線只畫在兩點之間。點了 0 之後移動游標會先預覽。點的時候會吸附到附近 K 棒的開高低收；Esc 取消。</p>
+    <p><b>下單</b>：用目前最後一根 5 分 K 的收盤價進場，停損在 -1，看價格在碰到 -1 之前，有沒有先到 1MM（2）、2MM（3）、3MM（4）。</p>
+    <p><b>結果</b>：1MM、2MM、3MM 三個目標分開算。同一根 K 棒同時碰到停損和目標時，看不出先後，一律保守算停損；到 Topstep 收盤（16:10）都沒碰到，就用最後一根收盤價出場。R＝賺賠點數 ÷ 進場到 -1 的距離。</p>
+    <p><b>最大回撤</b>：進場後到碰到目標之前，價格最多往不利方向走了多少（用 R 和點數表示；1R＝進場到 -1 的距離）。碰到目標的那一根看不出先後，也算進去，所以是保守的數字。</p>
+    <p><b>平均回撤</b>（成績表）：有到目標的單，到目標之前平均往不利方向走了幾 R。</p>
+    <p><b>到目標後回 -1</b>：價格先到目標之後，如果沒有停利一直抱著，收盤前會不會又打回 -1。<b>逆 EMA20</b>：做多時進場價在 EMA20 下方、做空時在上方。</p>
+    <p><b>重做</b>：揭曉後可以重做同一天，重做的作答和理由也會存下來，但不算成績。<b>收藏</b>：練習時隨時可以按「收藏」，把當下的畫面存一張；在「收藏」分頁點開會還原成那時的畫面，只能取消收藏或重做。</p>
+    <p><b>看全天</b>：沒有作答就直接看結果，不計分。</p>
+    <p><b>不做</b>：判斷不出來或覺得沒有好機會，就按「不做」，一樣會記錄，揭曉後會顯示之後的最大漲跌，看看是不是真的沒機會。</p>
+  </details>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* ---------- 主題 ---------- */
+/* 「MM 和結果怎麼算」只顯示在成績頁：先從頁面拿下來，成績重畫時接到最後 */
+const RULES = document.getElementById('rules'); RULES.remove();
+let theme = 'dark';
+try { theme = localStorage.getItem('practice-theme') || 'dark'; } catch (e) {}
+if (!['dark', 'eye', 'light'].includes(theme)) theme = 'dark';
+const applyTheme = () => { document.documentElement.dataset.pt = theme; document.querySelectorAll('.themes button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === theme))); if (chart) styleChart(); };
+document.querySelectorAll('.themes button').forEach(b => b.addEventListener('click', () => { theme = b.dataset.t; try { localStorage.setItem('practice-theme', theme); } catch (e) {} applyTheme(); }));
+/* 分頁：練習／成績／收藏 */
+/* view：要顯示的畫面（收藏回看時畫面是練習頁，但分頁停在「收藏」） */
+const showTab = (k, view = k) => { ['play', 'stats', 'fav'].forEach(x => { document.getElementById('tab-' + x).setAttribute('aria-selected', String(x === k)); document.getElementById('view-' + x).hidden = x !== view; }); };
+/* 在收藏回看時按「練習」：離開回看，開一題新的 */
+document.getElementById('tab-play').addEventListener('click', () => { const back = Q && Q.review; showTab('play'); if (back) newQuestion(); });
+document.getElementById('tab-stats').addEventListener('click', () => showTab('stats'));
+document.getElementById('tab-fav').addEventListener('click', () => showTab('fav'));
+
+/* ---------- 時間 ---------- */
+const N90 = 18, DAYS_BEFORE = 5, WK = ['日', '一', '二', '三', '四', '五', '六'];
+const etF = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hourCycle: 'h23' });
+const openUtc = (date) => { const [y, m, d] = date.split('-').map(Number), ms = Date.UTC(y, m - 1, d); return ms + ((+etF.formatToParts(new Date(ms + 12 * 3600e3)).find(p => p.type === 'hour').value % 24) === 8 ? 13 : 14) * 3600e3 + 30 * 60e3; };
+const tpe = (ms) => { const d = new Date(ms + 8 * 3600e3); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); };
+const mdw = (date) => { const [y, m, d] = date.split('-').map(Number); return `${m}/${d}（${WK[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}）`; };
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const f2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
+
+/* ---------- 狀態 ---------- */
+let DB = null, INDEX = [], ANS = {}, chart = null, cs = null, ls = null, ema = null, sep = null, plines = [];
+/* 圖型：K棒、收盤線 */
+let STYLE = 'candle'; try { STYLE = localStorage.getItem('practice-style') === 'line' ? 'line' : 'candle'; } catch (e) {}
+const BYT = new Map();
+const MONTHS = new Map();
+let Q = null; // { date, prior:[{date,b}], day:{b}, n, revealed, rec, recId, mm:{p0,p1,t0,t1}, redo, review }
+let MMMODE = false;
+let RESMIN = false; try { RESMIN = localStorage.getItem('practice-resmin') === '1'; } catch (e) {}
+let qCount = 0;
+
+const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+const snap = (s) => (s && s.exists && typeof s.data === 'function') ? s.data() : null;
+async function month(m) {
+  if (!MONTHS.has(m)) MONTHS.set(m, DB.doc('pbars/' + m).get().then(s => (snap(s) || {}).days || {}));
+  return MONTHS.get(m);
+}
+async function dayData(date) { const ds = await month(date.slice(0, 7)); return ds[date] || null; }
+
+/* ---------- MM ---------- */
+const tick = (x) => Math.round(x * 4) / 4;
+const LVS = [-1, 0, .5, 1, 2, 3, 4];
+function mmLv(mm) { const u = mm.p1 - mm.p0, o = {}; LVS.forEach(k => { o[k] = tick(mm.p0 + u * k); }); return o; }
+/* MM 照 TradingView 斐波那契回撤的樣子畫：線只畫在兩個點之間，左邊標級數和價位 */
+const SHOWLV = [-1, 0, .5, 1, 2, 3, 4];
+const rgba = (c, a) => { const m = /^#([0-9a-f]{6})$/i.exec(c.trim()); if (!m) return c; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+/* 時間對齊目前週期的格子（5 分畫的點切到 15 分也找得到位置） */
+const snapT = (t) => { const d = Math.floor(t / 86400) * 86400, m = (t - d) / 60; return d + (570 + Math.floor((m - 570) / TF) * TF) * 60; };
+const MMPRIM = {
+  req: null,
+  attached(p) { this.req = p.requestUpdate; }, detached() { this.req = null; }, updateAllViews() {},
+  paneViews() { return [{ zOrder: () => 'top', renderer: () => ({ draw: drawMMCanvas }) }]; },
+};
+function drawMM() { if (MMPRIM.req) MMPRIM.req(); }
+function drawMMCanvas(target) {
+  if (!Q || !Q.mm || Q.mm.p0 == null || !chart) return;
+  const ts = chart.timeScale(), x0 = ts.timeToCoordinate(snapT(Q.mm.t0));
+  const end = Q.mm.p1 != null ? { p: Q.mm.p1, t: Q.mm.t1 } : Q.hover; if (x0 == null) return;
+  const x1 = end && end.t != null ? ts.timeToCoordinate(snapT(end.t)) : null;
+  const u = end ? end.p - Q.mm.p0 : 0, ks = end ? SHOWLV : [0];
+  const L = Math.min(x0, x1 == null ? x0 : x1), R = Math.max(x0 + (x1 == null || Math.abs(x1 - x0) < 6 ? 40 : 0), x1 == null ? x0 : x1);
+  const cB = css('--bull'), cR = css('--bear'), cI = css('--ink-2'), cT = css('--ink-3');
+  target.useBitmapCoordinateSpace(({ context: g, horizontalPixelRatio: hr, verticalPixelRatio: vr }) => {
+    const Y = (p) => { const y = ema.priceToCoordinate(p); return y == null ? null : y * vr; };
+    const l = L * hr, r = R * hr;
+    /* 底色：-1～0 停損區淡紅，1～2、2～3 目標區淡綠 */
+    if (end) [[-1, 0, cR, .08], [1, 2, cB, .06], [2, 3, cB, .1]].forEach(([a, b, c, al]) => { const ya = Y(tick(Q.mm.p0 + u * a)), yb = Y(tick(Q.mm.p0 + u * b)); if (ya == null || yb == null) return; g.fillStyle = rgba(c, al); g.fillRect(l, Math.min(ya, yb), r - l, Math.abs(yb - ya)); });
+    g.font = `${11 * vr}px "IBM Plex Mono", ui-monospace, monospace`; g.textAlign = 'right'; g.textBaseline = 'middle';
+    ks.forEach(k => {
+      const pr = tick(Q.mm.p0 + u * k), y = Y(pr); if (y == null) return;
+      const col = k === -1 ? cR : k >= 2 ? cB : cI;
+      g.strokeStyle = col; g.lineWidth = Math.max(1, Math.round(hr)); g.setLineDash(k === .5 ? [4 * hr, 3 * hr] : []);
+      g.beginPath(); g.moveTo(l, Math.round(y) + .5); g.lineTo(r, Math.round(y) + .5); g.stroke();
+      g.fillStyle = k === .5 ? cT : col; g.fillText(`${k}（${f2(pr)}）`, l - 6 * hr, y);
+    });
+    g.setLineDash([]);
+  });
+}
+/* 進場：第 n 根收盤；之後逐根看先碰 -1 還是先到 2／3（同一根都碰到算停損），到 16:05 那根都沒有就收盤出場 */
+function simulate(b, n, lv, dir, entry) {
+  const risk = Math.abs(entry - lv[-1]), end = Math.min(80, b.length), r2 = (x) => Math.round(x * 100) / 100, one = (tg) => {
+    /* mae：到目標（或停損、收盤）之前，價格最多往不利方向走了多少（同一根看不出先後，碰到目標那根也算進去，保守） */
+    let worst = 0;
+    for (let i = n; i < end; i++) {
+      const x = b[i], st = dir > 0 ? x[2] <= lv[-1] : x[1] >= lv[-1], hit = dir > 0 ? x[1] >= tg : x[2] <= tg;
+      worst = Math.max(worst, dir > 0 ? entry - x[2] : x[1] - entry);
+      if (st) return { t: 'stop', r: -1, bar: i + 1, mae: 1, maePts: r2(risk) };
+      if (hit) {
+        /* 錯過停利的話：到收盤前會不會又回到 -1（同一根之後才算） */
+        let back = null; for (let j = i + 1; j < end; j++) { const y = b[j]; if (dir > 0 ? y[2] <= lv[-1] : y[1] >= lv[-1]) { back = j + 1; break; } }
+        return { t: 'win', r: Math.abs(tg - entry) / risk, bar: i + 1, back, mae: r2(worst / risk), maePts: r2(worst) };
+      }
+    }
+    const c = b[end - 1][3]; return { t: 'close', r: (c - entry) * dir / risk, bar: end, mae: r2(worst / risk), maePts: r2(worst) };
+  };
+  let far = 0; const u = lv[1] - lv[0];
+  for (let i = n; i < end; i++) { const x = b[i], st = dir > 0 ? x[2] <= lv[-1] : x[1] >= lv[-1]; far = Math.max(far, ((dir > 0 ? x[1] : x[2]) - lv[0]) / u); if (st) break; }
+  return { risk, t2: one(lv[2]), t3: one(lv[3]), t4: one(lv[4]), far: Math.round(far * 100) / 100 };
+}
+function afterMove(b, n) {
+  const c = b[n - 1][3], rest = b.slice(n, 80); if (!rest.length) return { up: 0, dn: 0 };
+  return { up: Math.max(...rest.map(x => x[1])) - c, dn: c - Math.min(...rest.map(x => x[2])) };
+}
+
+/* ---------- 圖 ---------- */
+function styleChart() {
+  chart.applyOptions({
+    layout: { background: { type: 'solid', color: css('--panel') }, textColor: css('--ink-2'), fontFamily: 'IBM Plex Mono, ui-monospace, monospace', fontSize: 11 },
+    grid: { vertLines: { color: css('--grid') }, horzLines: { color: css('--grid') } },
+    rightPriceScale: { borderColor: css('--line') }, timeScale: { borderColor: css('--line') },
+  });
+  cs.applyOptions({ upColor: css('--bull'), downColor: css('--bear'), wickUpColor: css('--bull'), wickDownColor: css('--bear') });
+  ls.applyOptions({ color: css('--ink') });
+  ema.applyOptions({ color: css('--ema') });
+  sep.applyOptions({ color: css('--sep') });
+  if (Q) { drawLevels(); drawMM(); }
+}
+const LBL = new Map();
+function makeChart(box) {
+  chart = LightweightCharts.createChart(box, {
+    autoSize: true,
+    crosshair: { mode: 0 },
+    rightPriceScale: { scaleMargins: { top: .08, bottom: .06 } },
+    timeScale: { rightOffset: 4, barSpacing: 7, minBarSpacing: 1.5, fixLeftEdge: true, lockVisibleTimeRangeOnResize: true,
+      tickMarkFormatter: (t) => (LBL.get(t) || {}).tick || '' },
+    localization: { timeFormatter: (t) => (LBL.get(t) || {}).full || '', priceFormatter: (p) => f2(p) },
+    handleScale: { axisPressedMouseMove: { time: true, price: true } },
+  });
+  sep = chart.addHistogramSeries({ priceScaleId: 'sep', priceLineVisible: false, lastValueVisible: false, base: 0 });
+  chart.priceScale('sep').applyOptions({ scaleMargins: { top: 0, bottom: 0 }, visible: false });
+  cs = chart.addCandlestickSeries({ borderVisible: false, priceLineVisible: false, lastValueVisible: true });
+  ls = chart.addLineSeries({ lineWidth: 2, priceLineVisible: false, lastValueVisible: true, crosshairMarkerRadius: 3 });
+  applyStyle();
+  ema = chart.addLineSeries({ lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+  ema.attachPrimitive(MMPRIM);
+  styleChart();
+  chart.subscribeCrosshairMove(showOHLC);
+  /* 畫 MM：直接聽網頁的點擊（圖表本身的點擊事件，兩下點太快時第二下會被吃掉），算出價位；會吸附到附近 K 棒的開高低收 */
+  box.addEventListener('click', (ev) => {
+    if (!MMMODE || !Q || Q.revealed) return;
+    const r = box.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (x > r.width - chart.priceScale('right').width() || y > r.height - chart.timeScale().height()) return;
+    let price = ema.coordinateToPrice(y); if (price == null) return;
+    const t = chart.timeScale().coordinateToTime(x), bar = t != null ? BYT.get(t) : null;
+    if (bar) { let best = null; [bar.open, bar.high, bar.low, bar.close].forEach(v => { const d = Math.abs(ema.priceToCoordinate(v) - y); if (d <= 10 && (!best || d < best.d)) best = { v, d }; }); if (best) price = best.v; }
+    price = tick(price);
+    const tt = t != null ? t : lastBar() && lastBar().time;
+    if (!Q.mm || Q.mm.p1 != null) Q.mm = { p0: price, t0: tt, p1: null, t1: null };
+    else if (price !== Q.mm.p0) { Q.mm.p1 = price; Q.mm.t1 = tt; MMMODE = false; Q.hover = null; }
+    drawMM(); renderQ();
+  });
+  /* 點了 0 之後，游標移動時先預覽整組 MM（像 TradingView 拖曳中的樣子） */
+  chart.subscribeCrosshairMove((p) => {
+    if (!MMMODE || !Q || !Q.mm || Q.mm.p1 != null || !p || !p.point) return;
+    const pr = ema.coordinateToPrice(p.point.y); if (pr == null) return;
+    Q.hover = { p: tick(pr), t: p.time != null ? p.time : chart.timeScale().coordinateToTime(p.point.x) }; drawMM();
+  });
+  /* 和 TradingView 一樣的 auto：拖過價格軸會關掉自動調整，按一下恢復 */
+  const ab = document.getElementById('autob'), sync = () => ab.classList.toggle('on', !!chart.priceScale('right').options().autoScale);
+  ab.addEventListener('click', () => { const ps = chart.priceScale('right'); ps.applyOptions({ autoScale: !ps.options().autoScale }); sync(); });
+  ['pointerup', 'wheel', 'dblclick', 'touchend'].forEach(ev => box.addEventListener(ev, () => setTimeout(sync, 0), { passive: true }));
+  AUTOSYNC = sync;
+}
+let AUTOSYNC = () => {};
+/* 左上角的開高低收：游標指到哪根就顯示哪根，沒指的時候顯示最新一根 */
+function showOHLC(p) {
+  const oh = document.getElementById('ohlc'); if (!oh) return;
+  const d = p && p.time != null ? BYT.get(p.time) : null, e = p && p.time != null ? p.seriesData.get(ema) : null;
+  const show = (d && d.open != null) ? d : lastBar(); if (!show) { oh.textContent = ''; return; }
+  const ev = d && d.open != null ? (e && e.value) : lastEma(), lb = LBL.get(show.time) || {};
+  oh.innerHTML = `${lb.full || ''}　開 <b>${f2(show.open)}</b> 高 <b>${f2(show.high)}</b> 低 <b>${f2(show.low)}</b> 收 <b>${f2(show.close)}</b>` + (show.prev != null ? (() => { const d = show.close - show.prev; return `　<span style="color:${css(d >= 0 ? '--bull' : '--bear')}">${d >= 0 ? '+' : ''}${f2(d)}（${d >= 0 ? '+' : ''}${(d / show.prev * 100).toFixed(2)}%）</span>`; })() : '') + (ev ? `　<span style="color:${css('--ema')}">EMA ${f2(ev)}</span>` : '');
+}
+let SERIES = { c: [], e: [], w: [] };
+function applyStyle() {
+  cs.applyOptions({ visible: STYLE === 'candle' }); ls.applyOptions({ visible: STYLE === 'line' });
+  document.querySelectorAll('.seg button[data-s]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === STYLE)));
+  document.querySelectorAll('.seg button[data-tf]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.tf === TF)));
+}
+const lastBar = () => { const c = SERIES.c; return c.length ? c[c.length - 1] : null; };
+const lastEma = () => { const e = SERIES.e; return e.length ? e[e.length - 1].value : 0; };
+
+/* 每一天用假的日期（2000/1/3 起每天一格）＋美東時間，圖上看不出真實日期；標籤自己畫 */
+/* 週期：5 分可以逐根揭曉；15 分由 5 分 K 每 3 根合成（09:30、09:45…對齊），只用來看大結構，EMA20 用 15 分 K 重算 */
+let TF = 5; try { TF = localStorage.getItem('practice-tf') === '15' ? 15 : 5; } catch (e) {}
+let DAYCNT = [];
+function buildSeries() {
+  LBL.clear(); DAYCNT = [];
+  const days = [...Q.prior.map(p => ({ date: p.date, b: p.b })), { date: Q.date, b: Q.day.b, today: true }];
+  const c = [], e = [], w = [], s = [], step = TF / 5, kk = 2 / 21; let e15 = null;
+  days.forEach((d, k) => {
+    const base = Date.UTC(2000, 0, 3 + k) / 1000, o = openUtc(d.date), name = d.today ? '當天' : (k === days.length - 2 ? '前一日' : `前${days.length - 1 - k}日`);
+    const tag = Q.revealed ? `${name} ${mdw(d.date)}` : name;
+    const lim = d.today && !Q.revealed ? Q.n : d.b.length;
+    const slots = Math.ceil((d.today ? Math.max(d.b.length, 81) : d.b.length) / step);
+    let cnt = 0;
+    for (let j = 0; j < slots; j++) {
+      const t = base + (570 + TF * j) * 60, real = o + j * TF * 60e3;
+      LBL.set(t, { tick: j === 0 ? tag : tpe(real), full: `${tag} ${TF === 5 ? '' : '15分 '}#${j + 1} ${tpe(real)}` });
+      s.push(j === 0 ? { time: t, value: 1 } : { time: t });
+      const g = j * step < lim ? d.b.slice(j * step, Math.min((j + 1) * step, lim)) : [];
+      if (g.length) {
+        const bar = { time: t, open: g[0][0], high: Math.max(...g.map(x => x[1])), low: Math.min(...g.map(x => x[2])), close: g[g.length - 1][3] };
+        bar.prev = c.length ? c[c.length - 1].close : null; c.push(bar); cnt++;
+        if (TF === 5) { if (g[0][4] != null) e.push({ time: t, value: g[0][4] }); }
+        else { e15 = e15 == null ? bar.close : bar.close * kk + e15 * (1 - kk); e.push({ time: t, value: Math.round(e15 * 100) / 100 }); }
+      } else if (d.today) w.push({ time: t });
+    }
+    DAYCNT.push(cnt);
+  });
+  SERIES = { c, e, w };
+  /* 揭曉後標籤會換成真實日期：換一個新的格式函式，讓圖表重畫刻度 */
+  chart.applyOptions({ timeScale: { tickMarkFormatter: (t) => (LBL.get(t) || {}).tick || '' }, localization: { timeFormatter: (t) => (LBL.get(t) || {}).full || '', priceFormatter: (p) => f2(p) } });
+  BYT.clear(); c.forEach(x => BYT.set(x.time, x));
+  cs.setData(c.concat(w)); ls.setData(c.map(x => ({ time: x.time, value: x.close })).concat(w));
+  ema.setData(e.concat(w));
+  sep.setData(s);
+  showOHLC(null);
+}
+function drawLevels() {
+  plines.forEach(p => ema.removePriceLine(p)); plines = [];
+  const pv = Q.prior[Q.prior.length - 1].b;
+  const L = [[pv[pv.length - 1][3], '昨收', '--level', 0], [Math.max(...pv.map(x => x[1])), '昨高', '--level', 2], [Math.min(...pv.map(x => x[2])), '昨低', '--level', 2]];
+  L.forEach(([p, t, c, st]) => plines.push(ema.createPriceLine({ price: p, color: css(c), lineWidth: 1, lineStyle: st, axisLabelVisible: true, title: t })));
+}
+function frame() {
+  const n = DAYCNT.length, total = DAYCNT.slice(0, n - 1).reduce((t, x) => t + x, 0);
+  const from = TF === 5 ? total - DAYCNT[n - 2] - DAYCNT[n - 3] : 0;
+  chart.timeScale().setVisibleLogicalRange({ from: from - 2, to: total + (Q.revealed ? DAYCNT[n - 1] : (TF === 5 ? Math.max(30, Q.n + 12) : Math.max(10, Math.ceil(Q.n / 3) + 4))) + 2 });
+}
+
+/* ---------- 題目 ---------- */
+function pickDate() {
+  const pool = INDEX.slice(DAYS_BEFORE);
+  const done = new Set(Object.values(ANS).map(a => a.date));
+  const fresh = pool.filter(d => !done.has(d) && (!Q || d !== Q.date));
+  const src = fresh.length ? fresh : pool;
+  return src[Math.floor(Math.random() * src.length)];
+}
+async function newQuestion() { const date = pickDate(); if (date) await loadQuestion(date, null); }
+/* review：從收藏打開時，還原成收藏當下的畫面（看到第幾根、MM、是否揭曉、作答結果） */
+async function loadQuestion(date, review) {
+  const i = INDEX.indexOf(date), pd = INDEX.slice(i - DAYS_BEFORE, i);
+  setBusy(true);
+  try {
+    const [day, ...prior] = await Promise.all([dayData(date), ...pd.map(dayData)]);
+    if (!day || prior.some(p => !p)) throw new Error('missing');
+    Q = { date, day, prior: prior.map((p, k) => ({ date: pd[k], ...p })), n: 1, revealed: false, rec: null };
+    MMMODE = false;
+    if (review) {
+      const f = review.fav; Q.review = review; Q.n = Math.max(1, Math.min(f.n, day.b.length - 1));
+      Q.rec = f.rec || null; Q.revealed = !!f.revealed;
+      if (f.p0 != null && f.p1 != null) Q.mm = { p0: f.p0, p1: f.p1, t0: f.t0, t1: f.t1 };
+      if (f.tf && f.tf !== TF) { TF = f.tf; applyStyle(); }
+      document.getElementById('note').value = f.note || '';
+    } else qCount++;
+    chart.priceScale('right').applyOptions({ autoScale: true }); AUTOSYNC();
+    buildSeries(); drawLevels(); drawMM(); frame(); renderQ();
+    if (Q.mm && Q.mm.t0 == null) { const lb = lastBar(); Q.mm.t0 = Q.mm.t1 = lb && lb.time; drawMM(); }
+  } catch (e) { setMsg('這一題的資料讀不到，按「換一題」再試'); }
+  setBusy(false);
+}
+/* 可以一直看到收盤前（最後要留一根給進場後的結果） */
+const maxN = () => Math.min(79, Q.day.b.length - 1);
+function nextBar() { if (!Q || Q.revealed || Q.review || Q.n >= maxN() || TF !== 5) return; Q.n++; buildSeries(); renderQ();
+  /* 最新一根快碰到右邊時，畫面往右挪一段 */
+  const ts = chart.timeScale(), r = ts.getVisibleLogicalRange(), last = DAYCNT.slice(0, -1).reduce((t, x) => t + x, 0) + DAYCNT[DAYCNT.length - 1] - 1;
+  if (r && last > r.to - 4) ts.setVisibleLogicalRange({ from: r.from + 12, to: r.to + 12 });
+}
+function plan() {
+  if (!Q || !Q.mm || Q.mm.p1 == null) return null;
+  const lv = mmLv(Q.mm), dir = Q.mm.p1 > Q.mm.p0 ? 1 : -1, entry = Q.day.b[Q.n - 1][3], risk = (entry - lv[-1]) * dir;
+  let bad = '';
+  if (risk <= 0) bad = '現價已經在 -1 停損外面';
+  else if ((lv[2] - entry) * dir <= 0) bad = '現價已經超過 1MM（2）';
+  const em = Q.day.b[Q.n - 1][4], counter = em != null && (entry - em) * dir < 0;
+  return { lv, dir, entry, risk, bad, em, counter, r2: (lv[2] - entry) * dir / risk, r3: (lv[3] - entry) * dir / risk, r4: (lv[4] - entry) * dir / risk };
+}
+const newId = () => 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+async function save(rec) {
+  /* 重做的作答也存下來（標 redo），但不算成績 */
+  if (Q.redo) rec.redo = true;
+  const id = newId(); Q.rec = rec; Q.recId = id; ANS[id] = rec; Q.revealed = true; MMMODE = false;
+  buildSeries(); frame(); renderQ(); renderStats();
+  try { await DB.doc('panswers/' + id).set(rec); } catch (e) { flash('作答沒有存成功（成績只在這次畫面裡）'); }
+}
+function order() {
+  const pl = plan(); if (!pl || pl.bad || Q.revealed || Q.review) return;
+  const res = simulate(Q.day.b, Q.n, pl.lv, pl.dir, pl.entry);
+  save({ kind: 'trade', date: Q.date, n: Q.n, tf: TF, dir: pl.dir, p0: Q.mm.p0, p1: Q.mm.p1, t0: Q.mm.t0, t1: Q.mm.t1, entry: pl.entry, ema: pl.em, counter: pl.counter, res, note: document.getElementById('note').value.trim(), at: new Date().toISOString() });
+}
+function pass() {
+  if (!Q || Q.revealed || Q.review) return;
+  save({ kind: 'skip', date: Q.date, n: Q.n, tf: TF, after: afterMove(Q.day.b, Q.n), note: document.getElementById('note').value.trim(), at: new Date().toISOString() });
+}
+/* 重做：同一天從第 1 根重來（第一次作答已經算過，之後的都不計入成績） */
+function redo() {
+  if (!Q || (!Q.revealed && !Q.review)) return;
+  if (Q.review) showTab('play');
+  Object.assign(Q, { n: 1, revealed: false, rec: null, recId: null, mm: null, hover: null, redo: true, review: null });
+  MMMODE = false; chart.priceScale('right').applyOptions({ autoScale: true }); AUTOSYNC();
+  buildSeries(); drawMM(); frame(); renderQ();
+}
+/* 收藏：每按一次就存一張當下的快照（獨立於作答紀錄），同一天收藏幾次都可以 */
+let FAVS = {};
+const favSig = () => Q ? [Q.date, Q.n, Q.revealed, Q.mm && Q.mm.p0, Q.mm && Q.mm.p1, Q.recId].join('|') : '';
+async function addFav() {
+  if (!Q) return;
+  /* 收藏回看時這顆按鈕是「取消收藏」 */
+  if (Q.review) { if (!Q.review.gone) { Q.review.gone = true; delFav(Q.review.id); renderQ(); } return; }
+  const m = Q.mm && Q.mm.p1 != null ? { p0: Q.mm.p0, p1: Q.mm.p1, t0: Q.mm.t0, t1: Q.mm.t1 } : {};
+  const f = { date: Q.date, n: Q.n, tf: TF, revealed: !!Q.revealed, ...m, note: (Q.rec && Q.rec.note) || document.getElementById('note').value.trim(), rec: Q.rec ? JSON.parse(JSON.stringify(Q.rec)) : null, redo: !!Q.redo, at: new Date().toISOString() };
+  const id = newId(); FAVS[id] = f; Q.favSig = favSig(); renderQ(); renderFavs();
+  try { await DB.doc('pfavs/' + id).set(f); } catch (e) { flash('收藏沒有存成功'); }
+}
+async function delFav(id) { delete FAVS[id]; renderFavs(); try { await DB.doc('pfavs/' + id).delete(); } catch (e) {} }
+function revealOnly() { if (!Q || Q.revealed) return; Q.revealed = true; MMMODE = false; buildSeries(); frame(); renderQ(); }
+function toggleMM() { if (!Q || Q.revealed || Q.review) return; MMMODE = !MMMODE; Q.hover = null; if (MMMODE) Q.mm = null; drawMM(); renderQ(); }
+
+/* ---------- 畫面 ---------- */
+const main = document.getElementById('main');
+function setMsg(t) { const m = document.getElementById('qmsg'); if (m) m.textContent = t; }
+function flash(t) { setMsg(t); }
+function setBusy(b) { main.querySelectorAll('.ctl button, #skip').forEach(x => { if (b) x.disabled = true; }); if (!b && Q) renderQ(); }
+function shell() {
+  main.innerHTML = `
+    <div class="qbar"><span class="qno" id="qno"></span><span class="pill" id="qbar"></span><span class="hint" id="qmsg"></span><button class="btn sm" id="skip" type="button">換一題</button><button class="btn sm" id="redo" type="button" hidden>重做這題</button><span class="sp"></span>
+      <span class="seg" role="group" aria-label="週期"><button type="button" data-tf="5">5 分</button><button type="button" data-tf="15">15 分</button></span>
+      <span class="seg" role="group" aria-label="圖型"><button type="button" data-s="candle">K棒</button><button type="button" data-s="line">收盤線</button></span></div>
+    <div class="chartbox"><div id="chart"></div><div class="ohlc" id="ohlc"></div><div class="res" id="res"></div><button class="btn nextb" id="next" type="button"></button><button class="autob on" id="autob" type="button" title="價格軸自動調整（按一下開／關）">auto</button></div>
+    <div class="legend"><span><i style="border-color:var(--ema)"></i>EMA20</span><span><i class="d" style="border-color:var(--level)"></i>昨收／昨高／昨低</span><span>淺色直條＝每天開盤</span></div>
+    <div class="ctl" id="ctl">
+      <button class="btn fav" id="favb" type="button">☆ 收藏</button>
+      <button class="btn" id="peek" type="button">看全天</button>
+      <input class="note" id="note" placeholder="理由（選填）：背景／力道／結構" maxlength="200">
+      <button class="btn" id="mmb" type="button">畫 MM</button>
+      <button class="btn pri" id="ord" type="button">下單</button>
+      <button class="btn" id="pass" type="button">不做</button>
+    </div>
+    <div class="plan" id="plan"></div>`;
+  makeChart(document.getElementById('chart'));
+  document.getElementById('next').addEventListener('click', nextBar);
+  document.getElementById('peek').addEventListener('click', revealOnly);
+  document.getElementById('skip').addEventListener('click', () => newQuestion());
+  document.getElementById('redo').addEventListener('click', redo);
+  main.querySelectorAll('.seg button[data-s]').forEach(b => b.addEventListener('click', () => { STYLE = b.dataset.s; try { localStorage.setItem('practice-style', STYLE); } catch (e) {} applyStyle(); }));
+  main.querySelectorAll('.seg button[data-tf]').forEach(b => b.addEventListener('click', () => { const v = +b.dataset.tf; if (v === TF) return; TF = v; try { localStorage.setItem('practice-tf', String(TF)); } catch (e) {} applyStyle(); if (Q) { buildSeries(); frame(); renderQ(); } }));
+  applyStyle();
+  document.getElementById('mmb').addEventListener('click', toggleMM);
+  document.getElementById('ord').addEventListener('click', order);
+  document.getElementById('pass').addEventListener('click', pass);
+  document.getElementById('favb').addEventListener('click', addFav);
+}
+const sg = (x, d = 2) => (x >= 0 ? '+' : '') + x.toFixed(d);
+const DIRN = { 1: '多單', '-1': '空單' };
+function outTxt(o) { return o.t === 'win' ? `達到（#${o.bar}，${sg(o.r)}R）` : o.t === 'stop' ? `先停損（#${o.bar}，-1R）` : `收盤出場（${sg(o.r)}R）`; }
+function renderQ() {
+  document.getElementById('qno').textContent = Q.review ? '收藏回看' : `第 ${qCount} 題`;
+  document.getElementById('qbar').textContent = Q.revealed ? `${mdw(Q.date)}　開盤 ${tpe(openUtc(Q.date))}` : Q.review ? `${mdw(Q.date)}　當時看到 #${Q.n}` : (Q.redo ? '重做（不計成績）　' : '') + `已看 #${Q.n}`;
+  setMsg(Q.review ? '收藏當時的畫面；要練同一張圖請按「重做這題」' : Q.revealed ? '' : MMMODE ? (Q.mm && Q.mm.p0 != null ? '再點 1（這段走勢的終點）' : '在圖上點 0（這段走勢的起點）') : (Q.n >= maxN() ? '已到收盤前最後一根，畫 MM 下單或選不做' : Q.n > N90 ? '已過開盤 90 分鐘' : '先問自己：背景？力道？結構？'));
+  const nx = document.getElementById('next');
+  nx.textContent = TF !== 5 ? '切回 5 分才能下一根' : (Q.n >= maxN() ? '已到最後' : `下一根 #${Q.n + 1}`); nx.disabled = Q.revealed || !!Q.review || Q.n >= maxN() || TF !== 5;
+  const sk = document.getElementById('skip'); sk.disabled = false; sk.textContent = Q.revealed ? '下一題' : '換一題'; sk.className = 'btn sm' + (Q.revealed ? ' pri' : '');
+  document.getElementById('redo').hidden = !Q.revealed && !Q.review;
+  /* 收藏回看：只留「取消收藏」和「重做這題」 */
+  ['skip', 'next', 'mmb', 'ord', 'pass', 'peek'].forEach(k => { document.getElementById(k).hidden = !!Q.review; });
+  nx.hidden = !!Q.review || Q.revealed;
+  const mb = document.getElementById('mmb'); mb.disabled = Q.revealed || !!Q.review; mb.textContent = MMMODE ? '取消畫 MM' : (Q.mm && Q.mm.p1 != null ? '重畫 MM' : '畫 MM'); mb.classList.toggle('on', MMMODE);
+  const pl = plan(), ob = document.getElementById('ord'); ob.disabled = Q.revealed || !!Q.review || !pl || !!pl.bad;
+  document.getElementById('pass').disabled = Q.revealed || !!Q.review;
+  /* 收藏按鈕：練習時存快照；收藏回看時變成「取消收藏」 */
+  const fv = document.getElementById('favb'), fon = Q.favSig === favSig();
+  fv.disabled = false; fv.textContent = fon ? '★ 已收藏' : '☆ 收藏'; fv.classList.toggle('on', fon); fv.setAttribute('aria-pressed', String(fon));
+  if (Q.review) { fv.textContent = Q.review.gone ? '已取消收藏' : '取消收藏'; fv.disabled = !!Q.review.gone; fv.classList.remove('on'); }
+  document.getElementById('peek').disabled = Q.revealed;
+  document.getElementById('chart').style.cursor = MMMODE ? 'crosshair' : '';
+  const note = document.getElementById('note'); note.disabled = Q.revealed || !!Q.review; if (!Q.revealed && !Q.review && Q.n === 1 && !Q.mm) note.value = '';
+  const pe = document.getElementById('plan'); pe.innerHTML = '';
+  if (pl && !Q.revealed) {
+    pe.append(el('span', pl.dir > 0 ? 'tag bull' : 'tag bear', DIRN[pl.dir]));
+    if (pl.counter) pe.append(el('span', 'tag ctr', '逆 EMA20'));
+    pe.append(el('span', null, `進場 ${f2(pl.entry)}（#${Q.n} 收盤）`), el('span', 'no', `停損 -1 ${f2(pl.lv[-1])}（${f2(Math.abs(pl.risk))} 點）`), el('span', 'ok', `1MM ${f2(pl.lv[2])}（${pl.r2.toFixed(2)}R）`), el('span', 'ok', `2MM ${f2(pl.lv[3])}（${pl.r3.toFixed(2)}R）`), el('span', 'ok', `3MM ${f2(pl.lv[4])}（${pl.r4.toFixed(2)}R）`));
+    if (pl.bad) pe.append(el('span', 'warn', pl.bad + '，請重畫'));
+  }
+  const box = document.getElementById('res'); box.className = 'res' + (Q.revealed ? ' on' : '') + (RESMIN ? ' min' : ''); box.innerHTML = '';
+  if (!Q.revealed) return;
+  /* 第一行（結論）固定顯示；其他細節可以收起，避免擋到 K 線 */
+  const top = el('div', 'rtop'), body = el('div', 'rbody'), mb2 = el('button', 'btn sm rmin', RESMIN ? '展開' : '收起');
+  mb2.type = 'button'; mb2.addEventListener('click', () => { RESMIN = !RESMIN; try { localStorage.setItem('practice-resmin', RESMIN ? '1' : '0'); } catch (e) {} renderQ(); });
+  box.append(top, body);
+  let first = true; const res = { append: (...xs) => xs.forEach(x => { if (first) { top.append(x, mb2); first = false; } else body.append(x); }) };
+  const r = Q.rec, tagRedo = Q.redo ? '（重做，不計成績）' : '';
+  if (r && r.kind === 'trade') {
+    const o2 = r.res.t2, o3 = r.res.t3, o4 = r.res.t4;
+    res.append(el('div', 'verdict ' + (o2.t === 'win' ? 'ok' : o2.t === 'stop' ? 'no' : ''), `${tagRedo}${DIRN[r.dir]}${r.counter ? '（逆 EMA20）' : ''}，#${r.n} 進場 ${f2(r.entry)}`));
+    const ul = el('ul', 'outs');
+    [['目標 1MM', o2], ['目標 2MM', o3], ['目標 3MM', o4]].filter(x => x[1]).forEach(([k, o]) => ul.append(el('li', null, `${k}：${outTxt(o)}${o.t !== 'stop' && o.mae != null ? `　最大回撤 ${o.mae.toFixed(2)}R（${f2(o.maePts)} 點）` : ''}${o.t === 'win' ? (o.back ? `　未停利會在 #${o.back} 觸發停損` : '　未停利也不會觸發停損') : ''}`)));
+    res.append(ul);
+    res.append(el('div', 'facts', `MM 0＝${f2(r.p0)}、1＝${f2(r.p1)}　停損距離 ${f2(r.res.risk)} 點`), el('div', 'facts', `停損前最遠走到 MM ${r.res.far.toFixed(2)}　進場時 EMA20 ${r.ema != null ? f2(r.ema) : '—'}`));
+  } else if (r && r.kind === 'skip') {
+    res.append(el('div', 'verdict', `${tagRedo}你在 #${r.n} 選了不做`));
+    res.append(el('div', 'facts', `之後到收盤（相對 #${r.n} 收盤）：最高 +${f2(r.after.up)} 點、最低 -${f2(r.after.dn)} 點`));
+  } else {
+    const a = afterMove(Q.day.b, Q.n);
+    res.append(el('div', 'verdict', '沒有作答，不計分'));
+    res.append(el('div', 'facts', `之後到收盤（相對 #${Q.n} 收盤）：最高 +${f2(a.up)} 點、最低 -${f2(a.dn)} 點`));
+  }
+  if (r && Q.recId) res.append(el('div', 'hint', r.note ? `理由：${r.note}` : '沒有寫理由'));
+}
+function renderStats() {
+  const box = document.getElementById('view-stats'), all = Object.values(ANS).filter(a => (a.kind === 'trade' || a.kind === 'skip') && !a.redo).sort((p, q) => q.at.localeCompare(p.at));
+  box.innerHTML = '';
+  if (!all.length) { box.append(el('div', 'msg', '還沒有作答紀錄。到「練習」分頁畫 MM 下單或選不做，成績會出現在這裡。'), RULES); return; }
+  const tr = all.filter(a => a.kind === 'trade'), sk = all.filter(a => a.kind === 'skip');
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—', has = (l, k) => l.filter(a => a.res[k]), avgR = (l, k) => { l = has(l, k); return l.length ? sg(l.reduce((t, a) => t + a.res[k].r, 0) / l.length) : '—'; };
+  const frac = (a, b) => b ? { txt: `${a}／${b}`, tip: Math.round(a / b * 100) + '%' } : '—';
+  const fracH = (a, b) => b ? `<span class="tip" title="${Math.round(a / b * 100)}%">${a}／${b}</span>` : '—';
+  const maeL = (l, k) => l.filter(a => a.res[k] && a.res[k].t === 'win' && a.res[k].mae != null).map(a => a.res[k].mae);
+  const maeAvg = (l, k) => { const m = maeL(l, k); return m.length ? (m.reduce((t, x) => t + x, 0) / m.length).toFixed(2) + 'R' : '—'; };
+  const maeMax = (l, k) => { const m = maeL(l, k); return m.length ? Math.max(...m).toFixed(2) + 'R' : '—'; };
+  const win = (l, k) => l.filter(a => a.res[k] && a.res[k].t === 'win').length, back = (l, k) => l.filter(a => a.res[k] && a.res[k].t === 'win' && a.res[k].back).length;
+  const sec = (title) => { const c = el('section', 'card stats'); c.append(el('h2', null, title)); box.append(c); return c; };
+  let kp = el('div', 'kpis'); const kps = [kp];
+  [[all.length, '題數'], [`${tr.length}／${sk.length}`, '下單／不做'], [frac(win(tr, 't2'), has(tr, 't2').length), '目標 1MM 達成'], [avgR(tr, 't2'), '目標 1MM 平均 R'], [frac(back(tr, 't2'), win(tr, 't2')), '到 1MM 後回 -1'], [maeAvg(tr, 't2'), '到 1MM 前平均回撤'], [maeMax(tr, 't2'), '到 1MM 前最大回撤'], [frac(win(tr, 't3'), has(tr, 't3').length), '目標 2MM 達成'], [avgR(tr, 't3'), '目標 2MM 平均 R'], [frac(back(tr, 't3'), win(tr, 't3')), '到 2MM 後回 -1'], [maeAvg(tr, 't3'), '到 2MM 前平均回撤'], [maeMax(tr, 't3'), '到 2MM 前最大回撤'], [frac(win(tr, 't4'), has(tr, 't4').length), '目標 3MM 達成'], [avgR(tr, 't4'), '目標 3MM 平均 R'], [frac(back(tr, 't4'), win(tr, 't4')), '到 3MM 後回 -1'], [maeAvg(tr, 't4'), '到 3MM 前平均回撤'], [maeMax(tr, 't4'), '到 3MM 前最大回撤']]
+    .forEach(([v, l], i) => { if (i === 2 || i === 7 || i === 12) { kp = el('div', 'kpis'); kps.push(kp); } const k = el('div', 'kpi'), vv = el('div', 'v', v && v.txt != null ? v.txt : String(v)); if (v && v.tip) { vv.title = v.tip; vv.classList.add('tip'); } k.append(vv, el('div', 'l', l)); kp.append(k); });
+  const ov = sec('總覽'); kps.forEach(x => ov.append(x));
+  /* 表格：依分組統計 */
+  const table = (rows) => { const t = el('table'), w = el('div', 'scroll');
+    /* 表頭兩層：每個目標一組（達成、平均 R、到目標前平均回撤、到目標後回 -1） */
+    const TG = [['t2', '目標 1MM'], ['t3', '目標 2MM'], ['t4', '目標 3MM']];
+    t.innerHTML = '<tr><th rowspan="2"></th><th class="n" rowspan="2">下單</th>' + TG.map(([, n]) => `<th class="grp" colspan="4">${n}</th>`).join('') + '<th class="n" rowspan="2">不做</th></tr>'
+      + '<tr>' + TG.map(() => '<th class="n">達成</th><th class="n">平均 R</th><th class="n">平均回撤</th><th class="n">後回 -1</th>').join('') + '</tr>'
+      + rows.map(([n, t, s]) => `<tr><td>${n}</td><td class="n">${t.length}</td>` + TG.map(([k]) =>
+        `<td class="n">${fracH(win(t, k), has(t, k).length)}</td><td class="n">${avgR(t, k)}</td><td class="n">${maeAvg(t, k)}</td><td class="n">${fracH(back(t, k), win(t, k))}</td>`).join('') + `<td class="n">${s == null ? '' : s.length}</td></tr>`).join('');
+    w.append(t); return w; };
+  const bk = [[1, 1, '第 1 根'], [2, 3, '#2～3'], [4, 6, '#4～6'], [7, 12, '#7～12'], [13, 18, '#13～18'], [19, 81, '#19 以後']];
+  sec('依作答時機').append(table(bk.map(([a, b, n]) => [n, tr.filter(x => x.n >= a && x.n <= b), sk.filter(x => x.n >= a && x.n <= b)])));
+  const c2 = sec('順勢／逆 EMA20');
+  c2.append(table([['順 EMA20', tr.filter(x => x.counter === false), null], ['逆 EMA20', tr.filter(x => x.counter === true), null], ['多單', tr.filter(x => x.dir > 0), null], ['空單', tr.filter(x => x.dir < 0), null]]));
+  /* 最近 20 題 */
+  const t3 = el('table'), wr = el('div', 'scroll');
+  const short = (o) => o.t === 'win' ? `✓ ${sg(o.r, 1)}R${o.mae != null ? `（撤 ${o.mae.toFixed(1)}R）` : ''}${o.back ? '，後回 -1' : ''}` : o.t === 'stop' ? '✗ -1R' : `收 ${sg(o.r, 1)}R`;
+  t3.innerHTML = '<tr><th></th><th>日期</th><th class="n">作答</th><th>動作</th><th>目標 1MM</th><th>目標 2MM</th><th>目標 3MM</th><th>理由</th></tr>' + all.slice(0, 20).map(a => a.kind === 'trade'
+    ? `<tr><td></td><td>${mdw(a.date)}</td><td class="n">#${a.n}</td><td class="${a.dir > 0 ? 'ok' : 'no'}">${DIRN[a.dir]}${a.counter ? '・逆EMA' : ''}</td><td>${short(a.res.t2)}</td><td>${short(a.res.t3)}</td><td>${a.res.t4 ? short(a.res.t4) : '—'}</td><td></td></tr>`
+    : `<tr><td></td><td>${mdw(a.date)}</td><td class="n">#${a.n}</td><td>不做</td><td colspan="3" class="hint">之後 +${f2(a.after.up)}／-${f2(a.after.dn)} 點</td><td></td></tr>`).join('');
+  all.slice(0, 20).forEach((a, i) => { const row = t3.rows[i + 1]; row.cells[row.cells.length - 1].textContent = a.note || ''; });
+  wr.append(t3); sec('最近 20 題').append(wr);
+  box.append(RULES);
+}
+
+/* ---------- 收藏：一筆一張卡，點了回到練習頁還原當時的畫面 ---------- */
+let FAVF = 'all';
+function renderFavs() {
+  const box = document.getElementById('view-fav'); box.innerHTML = '';
+  const list = Object.entries(FAVS).sort((p, q) => q[1].at.localeCompare(p[1].at));
+  const bar = el('div', 'chips'), R = (f) => f.rec || {};
+  [['all', '全部'], ['long', '多單'], ['short', '空單'], ['ctr', '逆 EMA20'], ['skip', '不做'], ['none', '未作答']].forEach(([k, t]) => {
+    const b = el('button', 'chip', t); b.type = 'button'; b.setAttribute('aria-pressed', String(FAVF === k)); b.addEventListener('click', () => { FAVF = k; renderFavs(); }); bar.append(b); });
+  bar.append(el('span', 'hint', `共 ${list.length} 筆`)); box.append(bar);
+  const ok = { all: () => true, long: f => R(f).kind === 'trade' && R(f).dir > 0, short: f => R(f).kind === 'trade' && R(f).dir < 0, ctr: f => R(f).kind === 'trade' && R(f).counter, skip: f => R(f).kind === 'skip', none: f => !f.rec }[FAVF];
+  const sel = list.filter(([, f]) => ok(f));
+  if (!sel.length) { box.append(el('div', 'card msg', list.length ? '這個篩選沒有收藏。' : '還沒有收藏。練習時按「☆ 收藏」，會把當下的畫面存在這裡。')); return; }
+  const grid = el('div', 'favs');
+  sel.forEach(([id, f]) => {
+    const a = R(f), c = el('div', 'card favc'); c.tabIndex = 0; c.setAttribute('role', 'button');
+    const h = el('div', 'fh'); h.append(el('b', null, mdw(f.date)), el('span', 'pill', `#${f.n}`));
+    if (a.kind === 'trade') { h.append(el('span', a.dir > 0 ? 'tag bull' : 'tag bear', DIRN[a.dir])); if (a.counter) h.append(el('span', 'tag ctr', '逆 EMA20')); }
+    else h.append(el('span', 'tag', a.kind === 'skip' ? '不做' : '未作答'));
+    if (f.redo) h.append(el('span', 'hint', '重做'));
+    const x = el('button', 'btn sm fdel', '移除'); x.type = 'button'; x.addEventListener('click', (e) => { e.stopPropagation(); delFav(id); });
+    h.append(el('span', 'sp'), x); c.append(h);
+    if (a.kind === 'trade') {
+      c.append(el('div', 'facts', `MM 0＝${f2(a.p0)}、1＝${f2(a.p1)}　進場 ${f2(a.entry)}　停損 ${f2(a.res.risk)} 點`));
+      [['目標 1MM', a.res.t2], ['目標 2MM', a.res.t3], ['目標 3MM', a.res.t4]].filter(x => x[1]).forEach(([k, o]) => c.append(el('div', 'fr ' + (o.t === 'win' ? 'ok' : o.t === 'stop' ? 'no' : ''), `${k}：${outTxt(o)}${o.t === 'win' && o.back ? '，之後回 -1' : ''}`)));
+    } else if (a.kind === 'skip') c.append(el('div', 'facts', `之後到收盤：最高 +${f2(a.after.up)}、最低 -${f2(a.after.dn)} 點`));
+    else c.append(el('div', 'facts', (f.p0 != null ? `MM 0＝${f2(f.p0)}、1＝${f2(f.p1)}　` : '') + (f.revealed ? '已看全天' : '還沒揭曉')));
+    c.append(el('div', 'fnote', f.note || '（沒有寫理由）'));
+    const go = () => openFav(id); c.addEventListener('click', go); c.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    grid.append(c);
+  });
+  box.append(grid);
+}
+async function openFav(id) { const f = FAVS[id]; if (!f) return; showTab('fav', 'play'); await loadQuestion(f.date, { id, fav: f }); }
+
+/* ---------- 鍵盤：→ 或空白鍵下一根，M 畫 MM，Enter 下單（揭曉後是下一題），Esc 取消畫 MM ---------- */
+document.addEventListener('keydown', (e) => {
+  if (!Q || e.target.tagName === 'INPUT' || document.getElementById('view-play').hidden) return;
+  if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextBar(); }
+  else if (e.key === 'm' || e.key === 'M') toggleMM();
+  else if (e.key === 'Escape' && MMMODE) { MMMODE = false; Q.hover = null; if (Q.mm && Q.mm.p1 == null) Q.mm = null; drawMM(); renderQ(); }
+  else if (e.key === 'Enter' && !Q.review) { if (Q.revealed) newQuestion(); else order(); }
+});
+
+/* ---------- 啟動 ---------- */
+applyTheme();
+(async () => {
+  try { DB = await claude.use('db'); } catch (e) { DB = null; }
+  if (!DB) { document.getElementById('loading').textContent = '這個檢視沒辦法讀資料庫。'; return; }
+  if (window.MJ && !MJ.hasToken()) { document.getElementById('loading').innerHTML = '還沒有設定 GitHub token。請先打開<a href="./">交易日誌</a>，按右上角「設定」填好 token，再回到這一頁。'; return; }
+  if (!window.LightweightCharts) { document.getElementById('loading').textContent = '圖表元件載入失敗，重新整理再試一次。'; return; }
+  try { INDEX = ((snap(await DB.doc('pmeta/index').get()) || {}).days || []).slice().sort(); } catch (e) { INDEX = []; if (window.MJ && MJ.status.error) { document.getElementById('loading').textContent = '讀不到資料：' + MJ.status.error; return; } }
+  if (INDEX.length <= DAYS_BEFORE) { document.getElementById('loading').textContent = '還沒有練習用的 K 線資料。'; return; }
+  DB.collection('panswers').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); ANS = Object.assign(m, Q && Q.recId ? { [Q.recId]: Q.rec } : {}); renderStats(); }, () => {});
+  DB.collection('pfavs').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); FAVS = m; renderFavs(); }, () => {});
+  shell();
+  newQuestion();
+})();
+})();
+</script>
+</body>
+</html>

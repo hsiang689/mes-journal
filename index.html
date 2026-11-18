@@ -430,10 +430,10 @@ button.cx-wh[aria-pressed="false"]{opacity:.38;filter:grayscale(1);text-decorati
     <div class="ttl"><h1>MES 交易日誌</h1>
       <div class="themes" role="group" aria-label="配色"><button type="button" data-t="eye">護眼</button><button type="button" data-t="dark">深色</button><button type="button" data-t="light">淺色</button></div>
       <script>(()=>{const r=document.documentElement,bs=[...document.querySelectorAll('.themes button')];
-        const set=t=>{if(!['eye','dark','light'].includes(t))t='eye';r.dataset.theme=t;bs.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===t)));
+        const set=t=>{if(!['eye','dark','light'].includes(t))t='dark';r.dataset.theme=t;bs.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===t)));
           try{localStorage.setItem('mj-theme',t)}catch(e){}
           document.querySelectorAll('meta[name="theme-color"]').forEach(m=>{m.removeAttribute('media');m.content=getComputedStyle(r).getPropertyValue('--bg').trim()})};
-        let t='eye';try{t=localStorage.getItem('mj-theme')||'eye'}catch(e){}
+        let t='dark';try{t=localStorage.getItem('mj-theme')||'dark'}catch(e){}
         set(t);bs.forEach(b=>b.addEventListener('click',()=>set(b.dataset.t)))})()</script>
     </div>
     <div class="tabs" role="tablist" aria-label="日誌分頁">

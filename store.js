@@ -6,6 +6,10 @@
  *   data/<collection>.json        其他集合：{ docId: doc }
  *   data/img/<id>.<ext>           圖解筆記的截圖
  *   data/chat-img/<id>.<ext>      小黃鴨討論的截圖（asset id 是 "chat-img/<id>.<ext>"）
+ * 別的網頁（例如 practice.html）可以在載入前設定 window.MJ_STORE = { colls: { 名稱: 位置 } }，只讀寫自己的集合：
+ *   { dir: 'practice/bars/', lazy: true, ro: true }  一個 doc 一個檔；lazy＝用到才下載；ro＝唯讀
+ *   { file: 'practice/answers.json' }                 整個集合一個檔 { docId: doc }
+ *   { file: 'practice/index.json', doc: 'index' }     整個檔就是一個 doc
  * 金鑰只存在這台電腦的瀏覽器（localStorage），不會進 repo。
  */
 (() => {
@@ -26,9 +30,11 @@
   }
   const [OWNER, REPO] = dataRepo();
   const BRANCH = 'main';
-  const SPLIT = { days: true };
-  const COLLS = ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket', 'coach'];
-  const fileOf = (coll, id) => (SPLIT[coll] ? `data/${coll}/${id}.json` : `data/${coll}.json`);
+  const CFG = (window.MJ_STORE && window.MJ_STORE.colls) || null;
+  const COLLS = CFG ? Object.keys(CFG) : ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket', 'coach'];
+  const spec = (c) => (CFG && CFG[c]) || (c === 'days' ? { dir: 'data/days/' } : { file: `data/${c}.json` });
+  const isSplit = (c) => !!spec(c).dir;
+  const fileOf = (coll, id) => { const s = spec(coll); return s.dir ? `${s.dir}${id}.json` : s.file; };
 
   const token = () => LS.get(K.gh);
   const S = { head: null, sha: {}, data: {}, loaded: false, ops: {}, timers: {}, waiters: {}, chain: Promise.resolve(), localImg: {} };
@@ -83,17 +89,19 @@
   async function loadAll() {
     const head = await headSha();
     const tree = await gh(repoPath(`/git/trees/${head}?recursive=1`));
-    const sha = {}; (tree.tree || []).forEach((e) => { if (e.type === 'blob' && e.path.startsWith('data/')) sha[e.path] = e.sha; });
+    const sha = {}; (tree.tree || []).forEach((e) => { if (e.type === 'blob') sha[e.path] = e.sha; });
     const data = {}; COLLS.forEach((c) => (data[c] = {}));
     const jobs = [];
     COLLS.forEach((c) => {
-      if (SPLIT[c]) {
-        Object.keys(sha).filter((p) => p.startsWith(`data/${c}/`) && p.endsWith('.json')).forEach((p) => {
-          const id = p.slice(`data/${c}/`.length, -5);
+      const s = spec(c);
+      if (s.dir) {
+        if (s.lazy) return;
+        Object.keys(sha).filter((p) => p.startsWith(s.dir) && p.endsWith('.json')).forEach((p) => {
+          const id = p.slice(s.dir.length, -5);
           jobs.push(ghRaw(p, head).then((r) => r.json()).then((v) => { if (v) data[c][id] = v; }));
         });
-      } else if (sha[`data/${c}.json`]) {
-        jobs.push(ghRaw(`data/${c}.json`, head).then((r) => r.json()).then((v) => { data[c] = v || {}; }));
+      } else if (sha[s.file]) {
+        jobs.push(ghRaw(s.file, head).then((r) => r.json()).then((v) => { data[c] = s.doc ? (v ? { [s.doc]: v } : {}) : (v || {}); }));
       }
     });
     await Promise.all(jobs);
@@ -125,13 +133,14 @@
   function write(coll, id, t, v) {
     if (!token()) return Promise.reject(Object.assign(new Error('沒有設定 GitHub token，目前是唯讀'), { code: 'no_token' }));
     if (!COLLS.includes(coll)) return Promise.reject(new Error('unknown collection ' + coll));
+    if (spec(coll).ro || spec(coll).doc) return Promise.reject(new Error('read-only collection ' + coll));
     const op = { t, id, v: v && stripDeletes(v) };
     if (t === 'update' && v) Object.keys(v).forEach((k) => { if (v[k] && v[k].__delete__) op.del = (op.del || []).concat(k); });
     applyOp(S.data[coll], op); if (op.del && S.data[coll][id]) { S.data[coll][id] = { ...S.data[coll][id] }; op.del.forEach((k) => delete S.data[coll][id][k]); }
     else if (S.data[coll][id]) S.data[coll][id] = { ...S.data[coll][id] };
     emit(coll, true);
     const file = fileOf(coll, id);
-    (S.ops[file] = S.ops[file] || { coll, id: SPLIT[coll] ? id : null, list: [] }).list.push(op);
+    (S.ops[file] = S.ops[file] || { coll, id: isSplit(coll) ? id : null, list: [] }).list.push(op);
     clearTimeout(S.timers[file]);
     S.timers[file] = setTimeout(() => flush(file), 1200);
     setStatus('saving');
@@ -154,16 +163,16 @@
     delete S.ops[file];
     const waiters = S.waiters[file] || []; delete S.waiters[file];
     const { coll, id } = job;
-    const label = SPLIT[coll] ? `${coll}/${id}` : `${coll}/${[...new Set(job.list.map((o) => o.id))].join(',')}`;
+    const label = isSplit(coll) ? `${coll}/${id}` : `${coll}/${[...new Set(job.list.map((o) => o.id))].join(',')}`;
     let attempt = 0;
     for (;;) {
       try {
         const sha = S.sha[file];
-        if (SPLIT[coll] && S.data[coll][id] === undefined) {
+        if (isSplit(coll) && S.data[coll][id] === undefined) {
           if (sha) await gh(repoPath(`/contents/${file}`), { method: 'DELETE', body: { message: `journal: delete ${label}`, sha, branch: BRANCH } });
           delete S.sha[file];
         } else {
-          const body = SPLIT[coll] ? S.data[coll][id] : S.data[coll];
+          const body = isSplit(coll) ? S.data[coll][id] : S.data[coll];
           const r = await gh(repoPath(`/contents/${file}`), { method: 'PUT', body: { message: `journal: update ${label}`, content: b64FromText(toText(body)), branch: BRANCH, ...(sha ? { sha } : {}) } });
           S.sha[file] = r.content.sha; if (r.commit && r.commit.sha) S.head = r.commit.sha;
         }
@@ -178,9 +187,9 @@
           if (rem) {
             S.sha[file] = rem.sha || undefined;
             let base = {};
-            if (rem.text) { try { const v = JSON.parse(rem.text); base = SPLIT[coll] ? { [id]: v } : v; } catch (x) {} }
+            if (rem.text) { try { const v = JSON.parse(rem.text); base = isSplit(coll) ? { [id]: v } : v; } catch (x) {} }
             job.list.forEach((op) => { applyOp(base, op); if (op.del && base[op.id]) op.del.forEach((k) => delete base[op.id][k]); });
-            if (SPLIT[coll]) { if (base[id] === undefined) delete S.data[coll][id]; else S.data[coll][id] = base[id]; }
+            if (isSplit(coll)) { if (base[id] === undefined) delete S.data[coll][id]; else S.data[coll][id] = base[id]; }
             else S.data[coll] = base;
             emit(coll, false);
           }
@@ -209,7 +218,7 @@
         const fresh = await loadAll();
         if (Object.keys(S.ops).length) return;
         S.head = fresh.head; S.sha = fresh.sha;
-        COLLS.forEach((c) => { const changed = JSON.stringify(S.data[c]) !== JSON.stringify(fresh.data[c]); S.data[c] = fresh.data[c]; if (changed) emit(c, false); });
+        COLLS.forEach((c) => { if (spec(c).lazy) return; const changed = JSON.stringify(S.data[c]) !== JSON.stringify(fresh.data[c]); S.data[c] = fresh.data[c]; if (changed) emit(c, false); });
       }
     } catch (e) {} finally { polling = false; }
   }
@@ -218,7 +227,8 @@
 
   // 清掉沒有任何圖解筆記或小黃鴨討論用到的截圖（例如刪除時網路中斷留下的），只清 10 分鐘前上傳的
   function cleanOrphans() {
-    if (!token() || Object.keys(S.ops).length) return;
+    // 只有交易日誌（讀得到圖解筆記和小黃鴨）才清；其他網頁看不到哪些截圖還在用，絕對不能清
+    if (CFG || !token() || Object.keys(S.ops).length) return;
     const used = new Set([
       ...Object.values(S.data.charts || {}).map((c) => c && c.asset),
       ...Object.values(S.data.coach || {}).map((c) => c && c.img),
@@ -246,6 +256,13 @@
     return ready;
   }
 
+  // lazy 集合：第一次 get 才下載那個檔（例如開盤練習的每月 K 線）
+  const lazyJobs = {};
+  function lazyLoad(coll, id) {
+    if (!spec(coll).lazy || S.data[coll][id] !== undefined) return Promise.resolve();
+    const p = fileOf(coll, id); if (!S.sha[p]) return Promise.resolve();
+    return lazyJobs[p] || (lazyJobs[p] = ghRaw(p, BRANCH).then((r) => r.json()).then((v) => { if (v) S.data[coll][id] = v; }).finally(() => { delete lazyJobs[p]; }));
+  }
   function docRef(path) {
     const [coll, id] = path.split('/');
     return {
@@ -253,7 +270,7 @@
       set: (v) => write(coll, id, 'set', v),
       update: (v) => write(coll, id, 'update', v),
       delete: () => write(coll, id, 'delete'),
-      get: async () => { await init(); const v = S.data[coll][id]; return { id, exists: v !== undefined, data: () => v }; },
+      get: async () => { await init(); await lazyLoad(coll, id); const v = S.data[coll][id]; return { id, exists: v !== undefined, data: () => v }; },
       onSnapshot(cb, err) {
         (L.doc[path] = L.doc[path] || []).push(cb);
         init().then(() => { const v = S.data[coll][id]; cb({ id, exists: v !== undefined, data: () => v, metadata: { hasPendingWrites: false } }); }).catch((e) => err && err(e));
