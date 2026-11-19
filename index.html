@@ -85,6 +85,7 @@ select{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);bord
 .lwbox{position:relative;height:min(68vh,620px);min-height:380px;padding:0;overflow:hidden}
 .autob{position:absolute;right:6px;bottom:4px;z-index:3;font:11px var(--f-mono);line-height:18px;padding:0 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink-3);cursor:pointer}
 .autob.on{color:var(--warn);border-color:var(--warn)}
+.mmtools{display:inline-flex;gap:6px;align-items:center}.mmtools .linkbtn{font-size:12px;padding:2px 9px}.mmb.on{border-color:var(--warn);color:var(--warn)}
 .lwtip{position:absolute;top:20px;transform:translateX(-50%);z-index:3;display:none;pointer-events:none;white-space:nowrap;font:500 11px var(--f-mono);background:var(--ink);color:var(--bg);padding:1px 6px;border-radius:4px}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-2);padding:0 10px 10px;align-items:center}
 .legend i{display:inline-block;margin-right:5px;vertical-align:-1px}
@@ -541,7 +542,7 @@ const money=v=>(v<0?'-':'+')+'$'+Math.abs(Number(v)).toFixed(2);
 const h=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 let showPrev=true;try{showPrev=localStorage.getItem('journal-prev')!=='0'}catch(e){}
 let showObs=true;try{showObs=localStorage.getItem('journal-obs')!=='0'}catch(e){}
-let DB=null,DAYS={},CUR=null,REV={},RULES=null,CASES=[],MEMO={},showAll=false,active=null,groups=[];
+let DRAW={},DB=null,DAYS={},CUR=null,REV={},RULES=null,CASES=[],MEMO={},showAll=false,active=null,groups=[];
 
 /* tabs */
 const TABS=[['tab-pre','view-pre'],['tab-coach','view-coach'],['tab-day','view-day'],['tab-notes','view-notes'],['tab-over','view-over'],['tab-book','view-book']];
@@ -567,7 +568,7 @@ function obsPop(anchor,o){document.querySelectorAll('.obs-pop').forEach(x=>x.rem
 /* ===== 每日檢討的 K 線：TradingView Lightweight Charts（可縮放、拖曳、auto） =====
    時間用假的日期（前一日＝2000/1/3、當天＝2000/1/4，各自從 09:30 每 5 分一格），刻度和游標標籤自己寫成台灣時間與棒號 */
 let LW=null;
-function drawLW(box,day,hov,onPick){
+function drawLW(box,day,hov,onPick,tools){
   const PREV=(showPrev&&day.prevBars)||[],BARS=day.bars||[],FILLS=day.fills||[],POS=day.pos||[],LEVELS=(day.levels||[]).filter(([,t])=>!/夜盤/.test(t)),openMin=day.openMin??(21*60+30);
   const tlabel=m=>{const t=openMin+m,hh=Math.floor(t/60)%24;return hh+':'+String(t%60).padStart(2,'0')};
   const D0=Date.UTC(2000,0,3)/1000,D1=Date.UTC(2000,0,4)/1000,T0=i=>D0+(570+5*i)*60,T1=i=>D1+(570+5*i)*60;
@@ -616,6 +617,22 @@ function drawLW(box,day,hov,onPick){
     [[0,'0',css('--line'),0],[-500,'-500',css('--bear'),2]].forEach(([p,t,col,st])=>PL.push([pnl,pnl.createPriceLine({price:p,color:col,lineWidth:1,lineStyle:st,axisLabelVisible:false,title:t})]));
     PRIM.req&&PRIM.req();
   }
+  /* 畫 MM：和開盤練習一樣（級數 -1、0、0.5、1、2、3、4）。按「畫 MM」後先點 0 再點 1，會吸附到附近 K 棒的開高低收；Esc 取消。存在 drawings/{日期} */
+  const MLV=[-1,0,.5,1,2,3,4],tick=x=>Math.round(x*4)/4;
+  let MMS=((DRAW[day.date]||{}).mm||[]).slice(),MMMODE=false,MMP=null,MMH=null;
+  const rgba=(c,a)=>{const m=/^#([0-9a-f]{6})$/i.exec(String(c).trim());if(!m)return c;const n=parseInt(m[1],16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`};
+  function drawOneMM(g,hr,vr,Y,mm,end){
+    const x0=xAt(mm.t0);if(x0==null)return;const x1=end&&end.t!=null?xAt(end.t):null;
+    const u=end?end.p-mm.p0:0,ks=end?MLV:[0];
+    const L=Math.min(x0,x1==null?x0:x1),R=Math.max(x0+(x1==null||Math.abs(x1-x0)<6?40:0),x1==null?x0:x1);
+    const cB=css('--bull'),cR=css('--bear'),cI=css('--ink-2'),cT=css('--ink-3'),l=L*hr,r=R*hr;
+    if(end)[[-1,0,cR,.08],[1,2,cB,.06],[2,3,cB,.1]].forEach(([a,b,c,al])=>{const ya=Y(tick(mm.p0+u*a)),yb=Y(tick(mm.p0+u*b));if(ya==null||yb==null)return;g.fillStyle=rgba(c,al);g.fillRect(l,Math.min(ya,yb),r-l,Math.abs(yb-ya))});
+    g.font=`${11*vr}px "IBM Plex Mono", ui-monospace, monospace`;g.textAlign='right';g.textBaseline='middle';
+    ks.forEach(k=>{const pr=tick(mm.p0+u*k),y=Y(pr);if(y==null)return;const col=k===-1?cR:k>=2?cB:cI;
+      g.strokeStyle=col;g.lineWidth=Math.max(1,Math.round(hr));g.setLineDash(k===.5?[4*hr,3*hr]:[]);g.beginPath();g.moveTo(l,Math.round(y)+.5);g.lineTo(r,Math.round(y)+.5);g.stroke();
+      g.fillStyle=k===.5?cT:col;g.fillText(`${k}（${fmt(pr)}）`,l-6*hr,y)});
+    g.setLineDash([]);
+  }
   /* 自己畫的部分：進出場、虛線、部位編號、收盤線、規則觸發線、觀察紀錄的旗子 */
   const FLAGS=[],HITS=[];
   const xAt=(t,frac)=>{const x=chart.timeScale().timeToCoordinate(t);if(x==null)return null;return x+(frac||0)*chart.timeScale().options().barSpacing};
@@ -658,6 +675,7 @@ function drawLW(box,day,hov,onPick){
         HITS.push({k,x:lx,y:ly-4})});
       /* 下方損益區的標示（放右邊，避開左下角的 TradingView 標誌） */
       {const py=v=>{const y=pnl.priceToCoordinate(v);return y==null?null:y*vr};
+        MMS.forEach(m=>drawOneMM(g,hr,vr,Y,{p0:m.p0,t0:m.t0},{p:m.p1,t:m.t1}));if(MMP)drawOneMM(g,hr,vr,Y,MMP,MMH);
         [[0,'0','--ink-2','損益'],[-500,'-500','--bear']].forEach(([v,s,c,n])=>{const y=py(v);if(y!=null)tag(s,y,css(c),n)});
         /* 損益線上，每筆出場的位置打一個小點（賺綠、賠紅） */
         POS.forEach((p,k)=>{const f=FILLS.find(f=>f[0]===k);if(!f)return;const x=xMin(f[4]),y=py(p[5]);if(x==null||y==null)return;g.fillStyle=css(p[4]>=0?'--bull':'--bear');g.beginPath();g.arc(x*hr,y,2.5*hr,0,Math.PI*2);g.fill()})}
@@ -672,8 +690,23 @@ function drawLW(box,day,hov,onPick){
   chart.subscribeCrosshairMove(p=>{const lb=p&&p.time!=null&&p.point?LBL.get(p.time):null;if(lb){tip.textContent=lb.full;const w=tip.offsetWidth||80,pw=ts.width();tip.style.left=Math.min(pw-w/2-2,Math.max(w/2+2,p.point.x))+'px';tip.style.display='block'}else tip.style.display='none'});
   chart.subscribeCrosshairMove(p=>{const v=p&&p.time!=null?BYT.get(p.time):null;if(!v){hov.textContent='滑過 K 棒看開高低收';return}const b=v.b;
     hov.textContent=`${v.prev?'前一日 ':''}#${v.i+1} ${tlabel(v.i*5)}  開 ${fmt(b[0])} 高 ${fmt(b[1])} 低 ${fmt(b[2])} 收 ${fmt(b[3])}${!v.prev&&b.length>4?'  EMA '+fmt(b[4]):''}`});
-  /* 點旗子看觀察紀錄、點進出場標記選那一筆部位 */
+  const mb=h('button','linkbtn mmb','畫 MM'),mc=h('button','linkbtn','清除 MM');mb.type=mc.type='button';mc.title='清除這一天畫的 MM';
+  const upd=()=>{mc.hidden=!MMS.length;mb.textContent=MMMODE?(MMP?'再點 1（終點）':'點 0（起點）'):'畫 MM';mb.classList.toggle('on',MMMODE);box.style.cursor=MMMODE?'crosshair':''};
+  const setMode=on=>{MMMODE=on;MMP=null;MMH=null;upd();PRIM.req&&PRIM.req()};
+  const saveMM=()=>{upd();const doc={date:day.date,mm:MMS,updatedAt:new Date().toISOString()};DRAW[day.date]=doc;if(DB)DB.doc('drawings/'+day.date).set(doc).catch(()=>{})};
+  mb.addEventListener('click',()=>setMode(!MMMODE));
+  mc.addEventListener('click',()=>{MMS=[];setMode(false);saveMM()});
+  if(tools)tools.append(mb,mc);upd();
+  const esc=e=>{if(e.key==='Escape'&&MMMODE)setMode(false)};addEventListener('keydown',esc);
+  chart.subscribeCrosshairMove(p=>{if(!MMMODE||!MMP||!p||!p.point)return;const pr=cs.coordinateToPrice(p.point.y);if(pr==null)return;MMH={p:tick(pr),t:p.time!=null?p.time:ts.coordinateToTime(p.point.x)};PRIM.req&&PRIM.req()});
+  /* 點旗子看觀察紀錄、點進出場標記選那一筆部位（畫 MM 時改成點 MM 的兩個點） */
   box.addEventListener('click',ev=>{const r=box.getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top;
+    if(MMMODE){ev.stopPropagation();if(x>ts.width()||y>r.height-ts.height())return;let price=cs.coordinateToPrice(y);if(price==null)return;
+      const t=ts.coordinateToTime(x),v=t!=null?BYT.get(t):null;if(t==null)return;
+      if(v){let best=null;v.b.slice(0,4).forEach(val=>{const yy=cs.priceToCoordinate(val);if(yy==null)return;const d=Math.abs(yy-y);if(d<=10&&(!best||d<best.d))best={val,d}});if(best)price=best.val}
+      price=tick(price);
+      if(!MMP){MMP={p0:price,t0:t};MMH=null;upd()}else if(price!==MMP.p0){MMS.push({p0:MMP.p0,t0:MMP.t0,p1:price,t1:t});MMMODE=false;MMP=null;MMH=null;saveMM()}
+      PRIM.req&&PRIM.req();return}
     const fl=FLAGS.find(f=>Math.abs(f.x-x)<=9&&y>=f.y-2&&y<=f.y+18);if(fl){ev.stopPropagation();obsPop({getBoundingClientRect:()=>({left:r.left+fl.x-8,top:r.top+fl.y})},fl.o);return}
     let best=null;HITS.forEach(t=>{const d=Math.hypot(t.x-x,t.y-y);if(d<=12&&(!best||d<best.d))best={d,k:t.k}});if(best)onPick(best.k)});
   /* auto：拖過價格軸會關掉自動調整，按一下恢復 */
@@ -693,7 +726,7 @@ function drawLW(box,day,hov,onPick){
   {const ro=new ResizeObserver(()=>{if(box.clientWidth>0){ts.setVisibleLogicalRange({from:-.5-padFor(LAST+3),to:LAST+2});ro.disconnect()}});ro.observe(box)}
   /* 換配色時重新上色 */
   const mo2=new MutationObserver(()=>style());mo2.observe(document.documentElement,{attributes:true,attributeFilter:['data-mj']});
-  return {paint:()=>PRIM.req&&PRIM.req(),destroy:()=>{mo2.disconnect();chart.remove()}};
+  return {paint:()=>PRIM.req&&PRIM.req(),syncMM:()=>{if(MMMODE)return;MMS=((DRAW[day.date]||{}).mm||[]).slice();upd();PRIM.req&&PRIM.req()},destroy:()=>{mo2.disconnect();removeEventListener('keydown',esc);chart.remove()}};
 }
 
 /* review memos */
@@ -734,6 +767,7 @@ function renderDay(){
   /* K 線來源：收盤 8 小時內是 Yahoo 的暫時資料，之後自動換成 Databento */
   let SRCT=null;
   if(day.barsSrc==='yahoo'&&(day.bars||[]).length){const st=h('span','src-tag',day.barsPartial?'資料來源：Yahoo（盤中，還沒到齊）':'資料來源：Yahoo（暫時）');st.title='收盤 8 小時後會自動換成 Databento（CME 原始資料），價位可能差一兩點';SRCT=st}
+  const tools=h('span','mmtools');lg.append(tools);
   lg.prepend(hov);lg.classList.add('top');cp.append(lg);
   /* 資料來源標籤固定在圖例下方自己一排（不會因為圖例長短跑到同一排） */
   if(SRCT){const sr=h('div','src-row');sr.append(SRCT);cp.append(sr)}cp.append(ch);
@@ -741,7 +775,7 @@ function renderDay(){
     ob.forEach(o=>{const r=h('div','quote');r.append(h('span','qn',String(o.n)));const t=h('span','qt');t.append(h('b',null,o.bars.map(b=>'#'+b).join(' ')+'　'),document.createTextNode(o.text));r.append(t);ol.append(r)});cp.append(ol)}}
   split.append(cp,led);wrap.append(split);
   groups=[];
-  if((day.bars||[]).length&&window.LightweightCharts)LW=drawLW(ch,day,hov,k=>{focusPos(k);const r=list.querySelector(`.row[data-k="${k}"]`);if(r&&active===k)r.scrollIntoView({block:'nearest'})});else cp.replaceChildren(barsPlaceholder(day));
+  if((day.bars||[]).length&&window.LightweightCharts)LW=drawLW(ch,day,hov,k=>{focusPos(k);const r=list.querySelector(`.row[data-k="${k}"]`);if(r&&active===k)r.scrollIntoView({block:'nearest'})},tools);else cp.replaceChildren(barsPlaceholder(day));
   cb.addEventListener('change',()=>{showAll=cb.checked;paint()});
   (day.pos||[]).forEach((p,k)=>{
     if(k===day.stopPos){list.append(h('div','divider',day.stopNote||'規則觸發，以下為規則之外的交易。'))}
@@ -1420,6 +1454,8 @@ $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
   db.doc('handbook/rules').onSnapshot(s=>{RULES=s.exists?s.data():null;renderBook();renderPre()},()=>{});
   db.collection('cases').onSnapshot(q=>{CASES=q.docs.map(d=>d.data());renderBook();renderPre()},()=>{});
   db.collection('charts').onSnapshot(q=>{CHARTS=q.docs.map(d=>({id:d.id,...d.data()}));fillCharts();renderBook();renderPre()},()=>{});
+  /* 每天在 K 線上畫的 MM（drawings/{日期}） */
+  db.collection('drawings').onSnapshot(q=>{DRAW={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)DRAW[v.date]=v});if(LW&&LW.syncMM)LW.syncMM()},()=>{});
   db.collection('premarket').onSnapshot(q=>{PREALL={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)PREALL[v.date]=v});if(!(q.metadata&&q.metadata.hasPendingWrites)){PRE=PREALL[TODAY]||null;applyPre()}if(DAYS[CUR]&&!document.activeElement?.closest?.('#dayBody'))renderDay()},()=>{});
 })();
 </script>

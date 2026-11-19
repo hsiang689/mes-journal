@@ -31,7 +31,7 @@
   const [OWNER, REPO] = dataRepo();
   const BRANCH = 'main';
   const CFG = (window.MJ_STORE && window.MJ_STORE.colls) || null;
-  const COLLS = CFG ? Object.keys(CFG) : ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket', 'coach'];
+  const COLLS = CFG ? Object.keys(CFG) : ['days', 'reviews', 'handbook', 'cases', 'charts', 'premarket', 'coach', 'drawings'];
   const spec = (c) => (CFG && CFG[c]) || (c === 'days' ? { dir: 'data/days/' } : { file: `data/${c}.json` });
   const isSplit = (c) => !!spec(c).dir;
   const fileOf = (coll, id) => { const s = spec(coll); return s.dir ? `${s.dir}${id}.json` : s.file; };
