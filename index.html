@@ -486,7 +486,7 @@ button.cx-wh[aria-pressed="false"]{opacity:.38;filter:grayscale(1);text-decorati
     <div id="bookBody"><div class="panel empty">正在讀取交易手冊。</div></div>
   </section>
 
-  <p class="note">K 線為 Databento（CME 原始資料）的 MES 連續合約，1 分 K 合成 5 分 K，EMA 為 20 根指數移動平均，和平台數值可能差幾毛。這是交易紀錄與複盤，不是交易建議。K 線圖使用 <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> 的 Lightweight Charts™。</p>
+  <p class="note">K 線為 Databento（CME 原始資料）的 MES 期貨（用當天成交的那個月份合約），1 分 K 合成 5 分 K，EMA 為 20 根指數移動平均，和平台數值可能差幾毛。這是交易紀錄與複盤，不是交易建議。K 線圖使用 <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> 的 Lightweight Charts™。</p>
 </div>
 
 <dialog class="set" id="setDlg" aria-labelledby="setTitle">
@@ -572,6 +572,10 @@ function obsPop(anchor,o){document.querySelectorAll('.obs-pop').forEach(x=>x.rem
 let LW=null;
 function drawLW(box,day,hov,onPick,tools){
   const PREV=(showPrev&&day.prevBars)||[],BARS=day.bars||[],FILLS=day.fills||[],POS=day.pos||[],LEVELS=(day.levels||[]).filter(([,t])=>!/夜盤/.test(t)),openMin=day.openMin??(21*60+30);
+  /* 部位分批出場時，每次出場後的累計已實現損益（手續費依口數平均分攤）：[[出場分鐘, 累計], …] */
+  const exitSteps=k=>{const p=POS[k],fs=FILLS.filter(f=>f[0]===k);if(!p||!fs.length)return[];const q=fs.reduce((a,f)=>a+f[6],0),gross=f=>(f[1]==='L'?f[5]-f[3]:f[3]-f[5])*5*f[6];
+    const fee=(p[4]-fs.reduce((a,f)=>a+gross(f),0))/q,base=p[5]-p[4],m=new Map();fs.forEach(f=>m.set(f[4],(m.get(f[4])||0)+gross(f)+fee*f[6]));
+    let c=base;return [...m.entries()].sort((a,b)=>a[0]-b[0]).map(([t,v])=>[t,+(c+=v).toFixed(2)])};
   const tlabel=m=>{const t=openMin+m,hh=Math.floor(t/60)%24;return hh+':'+String(t%60).padStart(2,'0')};
   const D0=Date.UTC(2000,0,3)/1000,D1=Date.UTC(2000,0,4)/1000,T0=i=>D0+(570+5*i)*60,T1=i=>D1+(570+5*i)*60;
   /* 只畫到最後一根 K 棒（或最後一筆出場、規則觸發），右邊不留空白 */
@@ -606,7 +610,7 @@ function drawLW(box,day,hov,onPick,tools){
   for(let i=0;i<ND;i++){const b=BARS[i];c.push(b?{time:T1(i),open:b[0],high:b[1],low:b[2],close:b[3]}:{time:T1(i)});e.push(b&&b.length>4?{time:T1(i),value:b[4]}:{time:T1(i)})}
   cs.setData(c);ema.setData(e);
   const barOf=m=>Math.min(ND-1,Math.max(0,Math.floor(m/5)));
-  {const pts=new Map([[T1(0),0]]);POS.forEach((p,k)=>{const f=FILLS.find(f=>f[0]===k);if(f)pts.set(T1(barOf(f[4])),p[5])});
+  {const pts=new Map([[T1(0),0]]);POS.forEach((p,k)=>exitSteps(k).forEach(([xm,c])=>pts.set(T1(barOf(xm)),c)));
     const last=[...pts.values()].pop();pts.set(T1(ND-1),last);pnl.setData([...pts].sort((a,b)=>a[0]-b[0]).map(([time,value])=>({time,value})))}
   const PL=[];
   function style(){
@@ -670,7 +674,7 @@ function drawLW(box,day,hov,onPick,tools){
           const sz=5,X=x1*hr,c2=css(s==='L'?'--bull':'--bear');g.fillStyle=c2;g.strokeStyle=css('--panel');g.lineWidth=hr;g.beginPath();
           if(s==='L'){g.moveTo(X,y1-sz*vr);g.lineTo(X+sz*hr,y1+sz*vr);g.lineTo(X-sz*hr,y1+sz*vr)}else{g.moveTo(X,y1+sz*vr);g.lineTo(X+sz*hr,y1-sz*vr);g.lineTo(X-sz*hr,y1-sz*vr)}
           g.closePath();g.fill();g.stroke();HITS.push({k,x:x1,y:y1/vr})});
-        const ex=xMin(fs[0][4]),ey=Y(fs[0][5]);if(ex!=null&&ey!=null){g.fillStyle=css('--panel');g.strokeStyle=col;g.lineWidth=2*hr;g.beginPath();g.arc(ex*hr,ey,4.5*hr,0,Math.PI*2);g.fill();g.stroke();HITS.push({k,x:ex,y:ey/vr})}
+        [...new Map(fs.map(f=>[f[4]+'|'+f[5],f])).values()].forEach(f=>{const ex=xMin(f[4]),ey=Y(f[5]);if(ex!=null&&ey!=null){g.fillStyle=css('--panel');g.strokeStyle=col;g.lineWidth=2*hr;g.beginPath();g.arc(ex*hr,ey,4.5*hr,0,Math.PI*2);g.fill();g.stroke();HITS.push({k,x:ex,y:ey/vr})}});
         const f0=fs.reduce((a,b)=>b[2]<a[2]?b:a),lx=xMin(f0[2]),fy=Y(f0[3]);if(lx==null||fy==null)return;const ly=p[0]==='Long'?fy/vr+20:fy/vr-12;
         g.fillStyle=css('--panel');g.strokeStyle=col;g.lineWidth=hr;g.beginPath();g.roundRect?g.roundRect((lx-9)*hr,(ly-11)*vr,18*hr,15*vr,4*hr):g.rect((lx-9)*hr,(ly-11)*vr,18*hr,15*vr);g.fill();g.stroke();
         g.fillStyle=css('--ink');g.textAlign='center';g.textBaseline='alphabetic';g.font=`500 ${11*vr}px system-ui, sans-serif`;g.fillText(String(k+1),lx*hr,ly*vr);g.textBaseline='top';g.font=`${10*vr}px "IBM Plex Mono", ui-monospace, monospace`;
@@ -680,7 +684,7 @@ function drawLW(box,day,hov,onPick,tools){
         MMS.forEach(m=>drawOneMM(g,hr,vr,Y,{p0:m.p0,t0:m.t0},{p:m.p1,t:m.t1}));if(MMP)drawOneMM(g,hr,vr,Y,MMP,MMH);
         [[0,'0','--ink-2','損益'],[-500,'-500','--bear']].forEach(([v,s,c,n])=>{const y=py(v);if(y!=null)tag(s,y,css(c),n)});
         /* 損益線上，每筆出場的位置打一個小點（賺綠、賠紅） */
-        POS.forEach((p,k)=>{const f=FILLS.find(f=>f[0]===k);if(!f)return;const x=xMin(f[4]),y=py(p[5]);if(x==null||y==null)return;g.fillStyle=css(p[4]>=0?'--bull':'--bear');g.beginPath();g.arc(x*hr,y,2.5*hr,0,Math.PI*2);g.fill()})}
+        POS.forEach((p,k)=>{const st=exitSteps(k);if(!st.length)return;const x=xMin(st[st.length-1][0]),y=py(p[5]);if(x==null||y==null)return;g.fillStyle=css(p[4]>=0?'--bull':'--bear');g.beginPath();g.arc(x*hr,y,2.5*hr,0,Math.PI*2);g.fill()})}
     });
   }
   const PRIM={req:null,attached(p){this.req=p.requestUpdate},detached(){this.req=null},updateAllViews(){},paneViews(){return[{zOrder:()=>'top',renderer:()=>({draw})}]}};
@@ -783,7 +787,7 @@ function renderDay(){navState();
     if(k===day.stopPos){list.append(h('div','divider',day.stopNote||'規則觸發，以下為規則之外的交易。'))}
     const nt=(day.notes||[])[k]||{c:[],t:''};
     const r=h('div','row');r.dataset.k=k;r.tabIndex=0;r.setAttribute('role','button');
-    const meta=h('span','meta');meta.append(h('span',p[0]==='Long'?'side-l':'side-s',(p[0]==='Long'?'做多 ':'放空 ')+p[1]+' 口'),h('span','m',`${fmt(p[2])}→${fmt(p[3])}`));
+    const meta=h('span','meta');meta.append(h('span',p[0]==='Long'?'side-l':'side-s',(p[0]==='Long'?'做多 ':'放空 ')+p[1]+' 口'+(p[10]&&p[10]<p[1]?`（最多 ${p[10]}）`:'')),h('span','m',`${fmt(p[2])}→${fmt(p[3])}`));
     const tx=h('span','txt'),chips=h('div','chips');(nt.c||[]).forEach(([c,t])=>chips.append(h('span','chip '+c,t)));
     tx.append(chips,h('div',null,`${barLab(p[8])}～${barLab(p[9])}　${nt.t||''}　累計 ${money(p[5])}`));
     r.append(h('span','n',String(k+1)),h('span','m time',`${p[6]}→${p[7]}`),h('span','pl '+(p[4]>=0?'pos':'neg'),money(p[4])),meta,tx);
@@ -1088,10 +1092,17 @@ function buildDay(trades){
   const date=sd.toISOString().slice(0,10),Y=sd.getUTCFullYear(),M=sd.getUTCMonth(),D=sd.getUTCDate();
   const edt=etParts(Date.UTC(Y,M,D,12)).h===8,openMs=Date.UTC(Y,M,D,edt?13:14,30),openMin=edt?21*60+30:22*60+30;
   const mins=ms=>Math.round((ms-openMs)/6e3)/10,bar=ms=>Math.floor((ms-openMs)/3e5)+1;
-  const G=new Map();trades.forEach(r=>{const k=r.X+'|'+r.side;if(!G.has(k))G.set(k,[]);G.get(k).push(r)});
-  const P=[...G.values()].map(g=>{g.sort((a,b)=>a.E-b.E);const q=g.reduce((a,r)=>a+r.q,0);return {g,side:g[0].side,q,avg:g.reduce((a,r)=>a+r.ep*r.q,0)/q,xp:g[0].xp,X:g[0].X,E:g[0].E,net:+g.reduce((a,r)=>a+r.pnl+r.fee,0).toFixed(2)}}).sort((a,b)=>a.E-b.E||a.X-b.X);
+  /* 部位＝倉位從 0 到回到 0：中間的加碼、減碼、分批出場都算同一個部位。
+     加碼時如果價位比手上部位的均價差（多單更低、空單更高），記一次「虧損中加碼」 */
+  const P=[];{const ev0=[];trades.forEach(r=>{ev0.push([r.E,r.q,r],[r.X,-r.q,r])});ev0.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+    let o=0,cur=null,open=[];ev0.forEach(([,d,r])=>{
+      if(d>0){if(o===0){cur={g:[],mx:0,addLoss:0};P.push(cur);open=[]}
+        else if(open.length){const oq=open.reduce((a,x)=>a+x.q,0),oa=open.reduce((a,x)=>a+x.ep*x.q,0)/oq;if(r.side==='Long'?r.ep<oa:r.ep>oa)cur.addLoss++}
+        cur.g.push(r);open.push(r)}else open=open.filter(x=>x!==r);
+      o+=d;if(cur)cur.mx=Math.max(cur.mx,o)})}
+  P.forEach(x=>{const g=x.g.sort((a,b)=>a.E-b.E),q=g.reduce((a,r)=>a+r.q,0);Object.assign(x,{side:g[0].side,q,avg:g.reduce((a,r)=>a+r.ep*r.q,0)/q,xp:+(g.reduce((a,r)=>a+r.xp*r.q,0)/q).toFixed(2),X:Math.max(...g.map(r=>r.X)),E:g[0].E,net:+g.reduce((a,r)=>a+r.pnl+r.fee,0).toFixed(2)})});
   let cum=0,streak=0,lost=false,stopIdx=-1,ruleTime=null,ruleWhy='',cumStop=0,stopMs=null;const notes=[];
-  P.forEach((x,i)=>{const c=[];if(stopIdx>=0&&i>=stopIdx)c.push(['warn','規則停止後']);if(cum<=-100&&x.q>1)c.push(['bad',`帳面 -$${Math.round(-cum)} 時 ${x.q} 口`]);
+  P.forEach((x,i)=>{const c=[];if(stopIdx>=0&&i>=stopIdx)c.push(['warn','規則停止後']);if(cum<=-100&&x.mx>1)c.push(['bad',`帳面 -$${Math.round(-cum)} 時 ${x.mx} 口`]);if(x.addLoss)c.push(['bad',x.addLoss>1?`虧損中加碼 ${x.addLoss} 次`:'虧損中加碼']);
     if(i>0){const pv=P[i-1],gap=(x.E-pv.X)/1000;if(pv.net<0&&pv.side!==x.side&&gap>=0&&gap<=60)c.push(['bad',`停損 ${Math.round(gap)} 秒反手`])}
     cum=+(cum+x.net).toFixed(2);x.cum=cum;if(x.net<0){streak++;lost=true}else streak=0;
     if(stopIdx<0&&(cum<=-500||streak>=3)){stopIdx=i+1;ruleTime=hhmm(x.X);cumStop=cum;stopMs=x.X;ruleWhy=cum<=-500&&streak>=3?'連虧 3 筆＋超過 -$500':cum<=-500?'超過 -$500':'連虧 3 筆';c.push(['bad',ruleWhy])}
@@ -1102,7 +1113,7 @@ function buildDay(trades){
   const wd=['日','一','二','三','四','五','六'][sd.getUTCDay()];
   const fills=[];P.forEach((x,k)=>x.g.forEach(r=>fills.push([k,r.side[0],mins(r.E),r.ep,mins(r.X),r.xp,r.q])));
   const doc={date,label:`${date.replace(/-/g,'/')}（週${wd}）`,openMin,bars:[],levels:[],fills,notes,
-    pos:P.map(x=>[x.side,x.q,+x.avg.toFixed(2),x.xp,x.net,x.cum,hhmm(x.E),hhmm(x.X),bar(x.E),bar(x.X)]),
+    pos:P.map(x=>[x.side,x.q,+x.avg.toFixed(2),x.xp,x.net,x.cum,hhmm(x.E),hhmm(x.X),bar(x.E),bar(x.X),x.mx]),
     stats:{net,ruleTime,ruleText:ruleTime?`${ruleWhy}，已實現 ${money(cumStop)}`:'',afterStop:after,afterStopNet:afterNet,maxLots:mx,contracts:trades.reduce((a,r)=>a+r.q,0)},
     stopPos:stopIdx>=0&&stopIdx<P.length?stopIdx:-1,stopMin:stopMs!=null?mins(stopMs):null,stopLabel:ruleTime?`${ruleTime} 規則：今天結束`:'',
     stopNote:ruleTime?`${ruleTime} ${ruleWhy}，已實現 ${money(cumStop)}，照你的規則今天到這裡結束。以下都是規則之外的交易。`:'',
@@ -1138,17 +1149,18 @@ async function fetchBars(day){
   const levels=[];cand.forEach(([p,n])=>{if(p>=lo-25&&p<=hi+25&&!levels.some(x=>Math.abs(x[0]-p)<1))levels.push([p,n])});
   return {bars,levels,prevInfo:prev.length?{c:prev[prev.length-1][4],h:Math.max(...prev.map(r=>r[2])),l:Math.min(...prev.map(r=>r[3]))}:null,onInfo:on.length?{h:Math.max(...on.map(r=>r[2])),l:Math.min(...on.map(r=>r[3]))}:null}}
 function reviewPrompt(day,bars,info){
+  const xs=fs=>{const m=new Map();fs.forEach(f=>{const k=f[4]+'|'+f[5];m.set(k,[f[5],(m.has(k)?m.get(k)[1]:0)+f[6],f[4]])});return [...m.values()].sort((a,b)=>a[2]-b[2]).map(([p,q,t])=>`${p}×${q}@${barLab(Math.floor(t/5)+1)}`).join('、')};
   const om=day.openMin??(21*60+30),tl=m=>{const x=om+m,hh=Math.floor(x/60)%24;return hh+':'+String(x%60).padStart(2,'0')};
   const bl=bars.map((b,i)=>`#${i+1} ${tl(i*5)} 開${b[0]} 高${b[1]} 低${b[2]} 收${b[3]} EMA${b[4]}`).join('\n');
   const pl=(day.pos||[]).map((p,k)=>{const fs=(day.fills||[]).filter(f=>f[0]===k);const en=fs.map(f=>`${f[3]}×${f[6]}@${barLab(Math.floor(f[2]/5)+1)}`).join('、');const chips=((day.notes||[])[k]||{c:[]}).c.map(c=>c[1]).join('、');
-    return `部位${k+1} ${p[0]==='Long'?'做多':'放空'} ${p[1]} 口 ${p[6]}→${p[7]} 進場 ${en} 出場 ${p[3]}@${barLab(p[9])} 淨 ${p[4]} 累計 ${p[5]} 標記：${chips}`}).join('\n');
+    return `部位${k+1} ${p[0]==='Long'?'做多':'放空'} ${p[1]} 口 ${p[6]}→${p[7]} 進場 ${en} 出場 ${xs(fs)} 淨 ${p[4]} 累計 ${p[5]} 標記：${chips}`}).join('\n');
   const lv=[info.prevInfo?`昨收 ${info.prevInfo.c}、昨高 ${info.prevInfo.h}、昨低 ${info.prevInfo.l}`:'',info.onInfo?`夜盤高 ${info.onInfo.h}、夜盤低 ${info.onInfo.l}`:''].filter(Boolean).join('；');
   return `你是使用 Al Brooks 價格行為學的 MES（微型 S&P 500 期貨）日內交易教練，正在幫交易者做盤後檢討。圖是 5 分鐘 K 線，均線是 20 EMA，時間是台灣時間。
-交易者的規則：每日停損 $500；連虧 3 筆就離場；帳面虧損超過 $100 時，只能下一口單（先把虧損打平，打平後才解除）。
+交易者的規則：每日停損 $500；連虧 3 筆就離場；帳面虧損超過 $100 時，只能下一口單（先把虧損打平，打平後才解除）；部位虧損中不加碼。
 價位：${lv||'無'}
 當天美股時段 K 棒：
 ${bl}
-交易者實際的部位（同時出場的成交合併為一個部位）：
+交易者實際的部位（倉位從 0 到回到 0 算一個部位，中間的加碼、減碼、分批出場都在同一個部位裡）：
 ${pl}
 請逐一檢討每個部位：當時的背景（趨勢或區間、always-in 方向、和 EMA 的關係）、進場位置和訊號棒好不好、方向對不對、問題在哪或做對了什麼。每個部位 1～3 句、80 字以內，具體提到棒號和價位，正體中文，口吻直接，像坐在旁邊講盤。
 另外列出照規則應該叫停或提醒的時間點（最多 3 個，沒有就給空陣列），以及一段 2～3 句的整體總結。只根據上面的資料，不要編造。
