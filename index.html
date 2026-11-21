@@ -146,6 +146,8 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .case p{margin:0;font-size:13px;color:var(--ink-2)}
 .case .src{font-size:12px;color:var(--ink-3)}
 .linkbtn{font:500 13px var(--f-sans);background:none;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:4px 10px;cursor:pointer;justify-self:start}
+.daynav{padding:4px 10px;font-size:12px;line-height:1.4}
+.linkbtn:disabled{opacity:.35;cursor:default}
 .linkbtn:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .rule{padding:12px 14px;display:grid;gap:2px}
@@ -464,7 +466,7 @@ button.cx-wh[aria-pressed="false"]{opacity:.38;filter:grayscale(1);text-decorati
   <section id="view-day" role="tabpanel" aria-labelledby="tab-day" style="display:grid;gap:16px">
     <div class="daybar">
       <label for="daySel" class="sub">交易日</label>
-      <select id="daySel" disabled><option>載入中…</option></select>
+      <button type="button" class="linkbtn daynav" id="dayPrev" title="前一個交易日" aria-label="前一個交易日" disabled>◀</button><select id="daySel" disabled><option>載入中…</option></select><button type="button" class="linkbtn daynav" id="dayNext" title="下一個交易日" aria-label="下一個交易日" disabled>▶</button>
       <p class="sub" id="dayHint">時間為台灣時間。▲ 買進、▼ 放空、圓點是出場。右邊開關打開才顯示全部部位，關閉時點選哪一筆就只顯示哪一筆。</p>
       <button type="button" class="linkbtn" id="importBtn" style="margin-left:auto">＋ 新增交易日</button>
     </div>
@@ -740,7 +742,7 @@ function paint(){if(LW)LW.paint();groups.forEach((g,i)=>{const on=showAll||activ
 function focusPos(k){active=active===k?null:k;paint()}
 
 /* daily view */
-function renderDay(){
+function renderDay(){navState();
   const body=$('dayBody'),day=DAYS[CUR];if(LW){LW.destroy();LW=null}body.replaceChildren();MEMO={};active=null;
   if(!day){body.append(h('div','panel empty','還沒有交易日。收盤後把成交紀錄貼給 Claude，就會加到這裡。'));return}
   const wrap=h('div');wrap.style.cssText='display:grid;gap:16px';
@@ -1419,6 +1421,10 @@ function renderPre(){
 
 function fillSelect(){const sel=$('daySel'),ds=Object.keys(DAYS).sort().reverse();sel.replaceChildren();if(!ds.length){sel.append(new Option('尚無資料',''));sel.disabled=true;return}ds.forEach(d=>sel.append(new Option(DAYS[d].label||d,d)));sel.disabled=false;if(!CUR||!DAYS[CUR])CUR=ds[0];sel.value=CUR}
 $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
+/* 前一天／下一天（照日期先後） */
+function navState(){const ds=Object.keys(DAYS).sort(),i=ds.indexOf(CUR);$('dayPrev').disabled=!(i>0);$('dayNext').disabled=!(i>=0&&i<ds.length-1)}
+function stepDay(d){const ds=Object.keys(DAYS).sort(),j=ds.indexOf(CUR)+d;if(j<0||j>=ds.length||ds.indexOf(CUR)<0)return;CUR=ds[j];$('daySel').value=CUR;renderDay()}
+$('dayPrev').addEventListener('click',()=>stepDay(-1));$('dayNext').addEventListener('click',()=>stepDay(1));
 
 /* settings dialog + sync status */
 (()=>{
