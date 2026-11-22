@@ -248,6 +248,45 @@ const SHOWLV = [-1, 0, .5, 1, 2, 3, 4];
 const rgba = (c, a) => { const m = /^#([0-9a-f]{6})$/i.exec(c.trim()); if (!m) return c; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
 /* 時間對齊目前週期的格子（5 分畫的點切到 15 分也找得到位置） */
 const snapT = (t) => { const d = Math.floor(t / 86400) * 86400, m = (t - d) / 60; return d + (570 + Math.floor((m - 570) / TF) * TF) * 60; };
+/* ---------- 盤中公布的事件（只在複測顯示）：時間是美東，畫在那根 K 的左邊；公布前就看得到 ----------
+   來源：聯準會 FOMC 會議行事曆（federalreserve.gov）、ISM 官方發布時間表（ismworld.org）。新的一年要再補上 */
+const EVT = (() => {
+  const m = {}, add = (ds, t, name) => ds.split(' ').forEach(d => (m[d] = m[d] || []).push([t, name]));
+  const FOMC = '2025-10-29 2025-12-10 2026-01-28 2026-03-18 2026-04-29 2026-06-17 2026-07-29 2026-09-16 2026-10-28 2026-12-09';
+  add(FOMC, '14:00', 'FOMC 利率決策'); add(FOMC, '14:30', 'FOMC 記者會');
+  add('2025-11-19 2025-12-30 2026-02-18 2026-04-08 2026-05-20 2026-07-08 2026-08-19 2026-10-07 2026-11-18', '14:00', 'FOMC 會議紀錄');
+  add('2025-11-03 2025-12-01 2026-01-05 2026-02-02 2026-03-02 2026-04-01 2026-05-01 2026-06-01 2026-07-01 2026-08-03 2026-09-01 2026-10-01 2026-11-02 2026-12-01', '10:00', 'ISM 製造業');
+  add('2025-11-05 2025-12-03 2026-01-07 2026-02-04 2026-03-04 2026-04-06 2026-05-05 2026-06-03 2026-07-06 2026-08-05 2026-09-03 2026-10-05 2026-11-04 2026-12-03', '10:00', 'ISM 服務業');
+  return m;
+})();
+/* 事件在當天第幾根（1 起算）和台灣時間 */
+const evtOf = (date) => (EVT[date] || []).map(([t, name]) => { const [h, mi] = t.split(':').map(Number), n = Math.floor((h * 60 + mi - 570) / 5) + 1; return { n, name, tw: tpe(openUtc(date) + (n - 1) * 5 * 60e3) }; });
+const EVPRIM = {
+  req: null,
+  attached(p) { this.req = p.requestUpdate; }, detached() { this.req = null; }, updateAllViews() {},
+  paneViews() { return [{ zOrder: () => 'top', renderer: () => ({ draw: drawEvents }) }]; },
+};
+function drawEvents(target) {
+  if (!Q || !Q.rp || !chart) return;
+  const ev = evtOf(Q.date); if (!ev.length) return;
+  const ts = chart.timeScale(), k = Q.prior.length, col = css('--accent');
+  target.useBitmapCoordinateSpace(({ context: g, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize }) => {
+    const sp = ts.options().barSpacing;
+    g.font = `${11 * vr}px "IBM Plex Sans TC", system-ui, sans-serif`; g.textBaseline = 'top'; g.textAlign = 'left';
+    /* 每個事件一行，文字不會疊在一起；線太靠右時文字改放在線的左邊 */
+    ev.forEach((e, i) => {
+      const x = ts.timeToCoordinate(snapT(Date.UTC(2000, 0, 3 + k) / 1000 + (570 + 5 * (e.n - 1)) * 60)); if (x == null) return;
+      const xb = Math.round((x - sp / 2) * hr) + .5, W = bitmapSize.width, y = (24 + i * 15) * vr;
+      g.fillStyle = col;
+      /* 還在畫面右邊外面：在右緣標「→」提醒，捲過去才畫線 */
+      if (xb > W - 2 * hr) { g.textAlign = 'right'; g.fillText(`${e.name} ${e.tw}（#${e.n}）→`, W - 6 * hr, y); g.textAlign = 'left'; return; }
+      g.strokeStyle = col; g.lineWidth = Math.max(1, Math.round(hr)); g.setLineDash([5 * hr, 4 * hr]);
+      g.beginPath(); g.moveTo(xb, 0); g.lineTo(xb, bitmapSize.height); g.stroke(); g.setLineDash([]);
+      const txt = `${e.name} ${e.tw}`, w = g.measureText(txt).width;
+      if (xb + 4 * hr + w > W) { g.textAlign = 'right'; g.fillText(txt, xb - 4 * hr, y); g.textAlign = 'left'; } else g.fillText(txt, xb + 4 * hr, y);
+    });
+  });
+}
 const MMPRIM = {
   req: null,
   attached(p) { this.req = p.requestUpdate; }, detached() { this.req = null; }, updateAllViews() {},
@@ -345,7 +384,7 @@ function makeChart(box) {
   ls = chart.addLineSeries({ lineWidth: 2, priceLineVisible: false, lastValueVisible: true, crosshairMarkerRadius: 3 });
   applyStyle();
   ema = chart.addLineSeries({ lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-  ema.attachPrimitive(MMPRIM);
+  ema.attachPrimitive(MMPRIM); ema.attachPrimitive(EVPRIM);
   styleChart();
   chart.subscribeCrosshairMove(showOHLC);
   {
@@ -834,6 +873,8 @@ function renderRP() {
   const info = document.getElementById('rpInfo'); info.innerHTML = '';
   const real = r.trades.reduce((t, x) => t + x.pnl, 0), un = p ? (curPx() - p.entry) * p.dir * 5 * p.qty - FEE * p.qty : 0;
   if (p) info.append(el('span', p.dir > 0 ? 'tag bull' : 'tag bear', `${DIRN[p.dir]} ${p.qty} 口`), el('span', null, `進場 ${f2(p.entry)}（#${p.n0}）`), el('span', un >= 0 ? 'ok' : 'no', `帳面 ${money(un)}（${sg((curPx() - p.entry) * p.dir)} 點）`));
+  const ev = evtOf(Q.date);
+  if (ev.length) info.append(el('span', 'warn', '今天有事件：' + ev.map(e => `${e.name} ${e.tw}（#${e.n}）`).join('、')));
   if (r.trades.length || p) info.append(el('span', real >= 0 ? 'ok' : 'no', `已實現 ${money(real)}（${r.trades.length} 筆）`), el('span', real + un >= 0 ? 'ok' : 'no', `合計 ${money(real + un)}`));
   if (real + un <= -500) info.append(el('span', 'warn', '已超過每日停損 −$500'));
   /* 這天的交易、這個月的複測總覽 */
