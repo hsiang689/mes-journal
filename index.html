@@ -1054,7 +1054,7 @@ async function analyzeShot(id,blob,overwrite){
   try{
     const out=await SAMPLE.json(SHOT_PROMPT,{images:blob,cache:false});
     const lessons=(Array.isArray(out&&out.lessons)?out.lessons:[]).map(s=>String(s).trim()).filter(Boolean).slice(0,5).map(s=>s.slice(0,120));
-    const cur=CHARTS.find(c=>c.id===id)||{};const patch={lessons,aiAt:new Date().toISOString()};
+    const cur=CHARTS.find(c=>c.id===id);if(!cur)return;/* 整理期間被刪掉了：不要再寫回去，否則會留下只有 lessons 的殘缺紀錄 */const patch={lessons,aiAt:new Date().toISOString()};
     await DB.doc('charts/'+id).update(patch);
     setFig(id,lessons.length?'已整理注意事項，請確認內容':'圖上沒有找到你寫的標註');
   }catch(e){
@@ -1498,7 +1498,7 @@ $('dayPrev').addEventListener('click',()=>stepDay(-1));$('dayNext').addEventList
   db.doc('handbook/checklist').onSnapshot(s=>{const d=s.exists&&s.data();chkSet(d&&Array.isArray(d.blocks)?d.blocks:blocksFromText((d&&d.text)||DEFAULT_CHK_TEXT),d&&d.count);const p=$('chkPanel');if(p&&CHKEDIT===null){fillChecks(p);applyPre()}},()=>{});
   db.doc('handbook/rules').onSnapshot(s=>{RULES=s.exists?s.data():null;renderBook();renderPre()},()=>{});
   db.collection('cases').onSnapshot(q=>{CASES=q.docs.map(d=>d.data());renderBook();renderPre()},()=>{});
-  db.collection('charts').onSnapshot(q=>{CHARTS=q.docs.map(d=>({id:d.id,...d.data()}));fillCharts();renderBook();renderPre()},()=>{});
+  db.collection('charts').onSnapshot(q=>{/* 缺日期或截圖的紀錄（寫壞的）先略過，免得整個圖解筆記畫不出來 */CHARTS=q.docs.map(d=>({id:d.id,...d.data()})).filter(c=>c.date&&c.asset);fillCharts();renderBook();renderPre()},()=>{});
   /* 每天在 K 線上畫的 MM（drawings/{日期}） */
   db.collection('drawings').onSnapshot(q=>{DRAW={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)DRAW[v.date]=v});if(LW&&LW.syncMM)LW.syncMM()},()=>{});
   db.collection('premarket').onSnapshot(q=>{PREALL={};q.docs.forEach(d=>{const v=d.data();if(v&&v.date)PREALL[v.date]=v});if(!(q.metadata&&q.metadata.hasPendingWrites)){PRE=PREALL[TODAY]||null;applyPre()}if(DAYS[CUR]&&!document.activeElement?.closest?.('#dayBody'))renderDay()},()=>{});

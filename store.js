@@ -188,7 +188,10 @@
             S.sha[file] = rem.sha || undefined;
             let base = {};
             if (rem.text) { try { const v = JSON.parse(rem.text); base = isSplit(coll) ? { [id]: v } : v; } catch (x) {} }
-            job.list.forEach((op) => { applyOp(base, op); if (op.del && base[op.id]) op.del.forEach((k) => delete base[op.id][k]); });
+            /* 剛寫進去的檔，GitHub 有時幾秒內還回舊內容（還沒有剛新增的那筆）；這時 update 只會留下這次改的欄位，
+               整筆紀錄被寫壞（2026/11/23 圖解筆記 9/29 那張就只剩 aiAt、lessons）。遠端沒有這筆、本地有時，用本地的那筆當底 */
+            const local = S.data[coll] || {};
+            job.list.forEach((op) => { if (op.t === 'update' && base[op.id] === undefined && local[op.id] !== undefined) base[op.id] = { ...local[op.id] }; applyOp(base, op); if (op.del && base[op.id]) op.del.forEach((k) => delete base[op.id][k]); });
             if (isSplit(coll)) { if (base[id] === undefined) delete S.data[coll][id]; else S.data[coll][id] = base[id]; }
             else S.data[coll] = base;
             emit(coll, false);
