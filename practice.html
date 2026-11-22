@@ -405,9 +405,18 @@ const lastEma = () => { const e = SERIES.e; return e.length ? e[e.length - 1].va
 /* 週期：5 分可以逐根揭曉；15 分由 5 分 K 每 3 根合成（09:30、09:45…對齊），只用來看大結構，EMA20 用 15 分 K 重算 */
 let TF = 5; try { TF = localStorage.getItem('practice-tf') === '15' ? 15 : 5; } catch (e) {}
 let DAYCNT = [];
+/* 換月：前幾天如果是舊合約，整段加上換月價差（存在新合約第一天的 adj.v），K 線和 EMA20 才接得起來
+   從當天往前看，碰到換月那天，之前的日子都要再加上它的價差 */
+function rollOff() {
+  const ds = [...Q.prior, Q.day], out = new Array(ds.length).fill(0); let o = 0;
+  for (let i = ds.length - 1; i >= 0; i--) { out[i] = o; const a = ds[i].adj; if (a && a.v) o += a.v; }
+  return out.slice(0, Q.prior.length);
+}
+const shiftB = (b, o) => !o ? b : b.map(x => [x[0] + o, x[1] + o, x[2] + o, x[3] + o, x[4] != null ? Math.round((x[4] + o) * 100) / 100 : x[4]]);
 function buildSeries() {
   LBL.clear(); DAYCNT = [];
-  const days = [...Q.prior.map(p => ({ date: p.date, b: p.b })), { date: Q.date, b: Q.day.b, today: true }];
+  const off = rollOff();
+  const days = [...Q.prior.map((p, k) => ({ date: p.date, b: shiftB(p.b, off[k]), off: off[k] })), { date: Q.date, b: Q.day.b, today: true, off: 0 }];
   const c = [], e = [], w = [], s = [], step = TF / 5, kk = 2 / 21; let e15 = null;
   days.forEach((d, k) => {
     const base = Date.UTC(2000, 0, 3 + k) / 1000, o = openUtc(d.date), name = d.today ? '當天' : (k === days.length - 2 ? '前一日' : `前${days.length - 1 - k}日`);
@@ -417,7 +426,7 @@ function buildSeries() {
     let cnt = 0;
     for (let j = 0; j < slots; j++) {
       const t = base + (570 + TF * j) * 60, real = o + j * TF * 60e3;
-      LBL.set(t, { tick: j === 0 ? tag : tpe(real), full: `${tag} ${TF === 5 ? '' : '15分 '}#${j + 1} ${tpe(real)}` });
+      LBL.set(t, { tick: j === 0 ? tag : tpe(real), full: `${tag} ${TF === 5 ? '' : '15分 '}#${j + 1} ${tpe(real)}${d.off ? `（換月調整 ${d.off > 0 ? '+' : ''}${f2(d.off)}）` : ''}` });
       s.push(j === 0 ? { time: t, value: 1 } : { time: t });
       const g = j * step < lim ? d.b.slice(j * step, Math.min((j + 1) * step, lim)) : [];
       if (g.length) {
@@ -441,7 +450,7 @@ function buildSeries() {
 }
 function drawLevels() {
   plines.forEach(p => ema.removePriceLine(p)); plines = [];
-  const pv = Q.prior[Q.prior.length - 1].b;
+  const pv = shiftB(Q.prior[Q.prior.length - 1].b, rollOff()[Q.prior.length - 1]);
   const L = [[pv[pv.length - 1][3], '昨收', '--level', 0], [Math.max(...pv.map(x => x[1])), '昨高', '--level', 2], [Math.min(...pv.map(x => x[2])), '昨低', '--level', 2]];
   L.forEach(([p, t, c, st]) => plines.push(ema.createPriceLine({ price: p, color: css(c), lineWidth: 1, lineStyle: st, axisLabelVisible: true, title: t })));
 }
