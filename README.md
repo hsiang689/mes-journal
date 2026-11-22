@@ -4,8 +4,6 @@ MES 日內交易的檢討日誌：盤前提醒、每日檢討（K 線＋進出�
 
 網頁：https://hsiang689.github.io/mes-journal/
 
-這個 repo 只有網頁程式（公開）。**資料放在私人 repo `hsiang689/mes-journal-data`**，網頁用你的 GitHub token 讀寫；沒有 token 的人打開網頁什麼資料都看不到。
-
 ## 運作方式
 
 - **網頁**（`index.html`、`store.js`、`sw.js`、`manifest.webmanifest`、`icons/`）由 GitHub Pages 發布，只有這些檔變動時才重新發布。
