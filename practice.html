@@ -22,6 +22,8 @@
   pmeta: { file: 'practice/index.json', doc: 'index', ro: true },
   panswers: { file: 'practice/answers.json' },
   pfavs: { file: 'practice/favs.json' },
+  preplay: { file: 'practice/replay.json' },                 // 複測紀錄
+  jdays: { dir: 'data/days/', lazy: true, ro: true },        // 每日檢討的交易日（只讀，複測時拿實際損益來比）
 } };</script>
 <script src="store.js"></script>
 <style>
@@ -109,6 +111,17 @@ h1{font-size:20px;font-weight:500;margin:0}
 .ctl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
 .note{flex:1;min-width:180px;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 10px}
 .plan{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:0 14px 12px;font:13px var(--f-mono);color:var(--ink-2)}
+/* 複測模式：練習專用的元件藏起來，複測專用的元件只在複測時出現 */
+#main.rpmode .pq{display:none!important}
+#main:not(.rpmode) .rq{display:none!important}
+.rpinfo{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:0 14px 12px;font:13px var(--f-mono);color:var(--ink-2)}
+.rpinfo:empty{display:none}
+.rpsum{padding:0 14px 14px;display:grid;gap:12px}
+.rpsum h3{font-size:14px;font-weight:500;margin:4px 0 2px;color:var(--ink-2)}
+.rpsum td.t{white-space:normal;min-width:120px;color:var(--ink-2)}
+.rpsum .rpmemo{width:100%;min-width:220px;padding:3px 8px;font-size:13px}
+select.rps{font:13px var(--f-sans);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:3px 6px}
+.btn.buy{border-color:var(--bull);color:var(--bull)} .btn.sell{border-color:var(--bear);color:var(--bear)}
 .plan:empty{display:none}
 .tag{font:12px var(--f-sans);border:1px solid currentColor;border-radius:99px;padding:0 9px}
 .tag.bull{color:var(--bull)} .tag.bear{color:var(--bear)}
@@ -148,6 +161,7 @@ summary{cursor:pointer;color:var(--ink-3)}
     <span class="sp"></span>
     <div class="tabs" role="tablist" aria-label="練習分頁">
       <button role="tab" id="tab-play" aria-selected="true" aria-controls="view-play" type="button">練習</button>
+      <button role="tab" id="tab-rp" aria-selected="false" aria-controls="view-play" type="button">複測</button>
       <button role="tab" id="tab-fav" aria-selected="false" aria-controls="view-fav" type="button">收藏</button>
       <button role="tab" id="tab-stats" aria-selected="false" aria-controls="view-stats" type="button">成績</button>
     </div>
@@ -188,9 +202,11 @@ const applyTheme = () => { document.documentElement.dataset.pt = theme; document
 document.querySelectorAll('.themes button').forEach(b => b.addEventListener('click', () => { theme = b.dataset.t; try { localStorage.setItem('practice-theme', theme); } catch (e) {} applyTheme(); }));
 /* 分頁：練習／成績／收藏 */
 /* view：要顯示的畫面（收藏回看時畫面是練習頁，但分頁停在「收藏」） */
-const showTab = (k, view = k) => { ['play', 'stats', 'fav'].forEach(x => { document.getElementById('tab-' + x).setAttribute('aria-selected', String(x === k)); document.getElementById('view-' + x).hidden = x !== view; }); };
+const showTab = (k, view = k) => { if (view === 'rp') view = 'play'; ['play', 'rp', 'stats', 'fav'].forEach(x => document.getElementById('tab-' + x).setAttribute('aria-selected', String(x === k))); ['play', 'stats', 'fav'].forEach(x => { document.getElementById('view-' + x).hidden = x !== view; }); };
 /* 在收藏回看時按「練習」：離開回看，開一題新的 */
-document.getElementById('tab-play').addEventListener('click', () => { const back = Q && Q.review; showTab('play'); if (back) newQuestion(); });
+document.getElementById('tab-play').addEventListener('click', () => { const back = Q && (Q.review || Q.rp); showTab('play'); if (back) newQuestion(); });
+/* 複測：照日期重新走一遍那天，自己決定進出場（和練習的成績、收藏分開） */
+document.getElementById('tab-rp').addEventListener('click', () => { showTab('rp'); if (!Q || !Q.rp) loadReplay(rpDefault()); });
 document.getElementById('tab-stats').addEventListener('click', () => showTab('stats'));
 document.getElementById('tab-fav').addEventListener('click', () => showTab('fav'));
 
@@ -374,7 +390,7 @@ function buildSeries() {
   const c = [], e = [], w = [], s = [], step = TF / 5, kk = 2 / 21; let e15 = null;
   days.forEach((d, k) => {
     const base = Date.UTC(2000, 0, 3 + k) / 1000, o = openUtc(d.date), name = d.today ? '當天' : (k === days.length - 2 ? '前一日' : `前${days.length - 1 - k}日`);
-    const tag = Q.revealed ? `${name} ${mdw(d.date)}` : name;
+    const tag = Q.revealed || Q.rp ? `${name} ${mdw(d.date)}` : name;
     const lim = d.today && !Q.revealed ? Q.n : d.b.length;
     const slots = Math.ceil((d.today ? Math.max(d.b.length, 81) : d.b.length) / step);
     let cnt = 0;
@@ -399,6 +415,7 @@ function buildSeries() {
   cs.setData(c.concat(w)); ls.setData(c.map(x => ({ time: x.time, value: x.close })).concat(w));
   ema.setData(e.concat(w));
   sep.setData(s);
+  const mk = rpMarkers(); cs.setMarkers(mk); ls.setMarkers(mk);
   showOHLC(null);
 }
 function drawLevels() {
@@ -423,13 +440,13 @@ function pickDate() {
 }
 async function newQuestion() { const date = pickDate(); if (date) await loadQuestion(date, null); }
 /* review：從收藏打開時，還原成收藏當下的畫面（看到第幾根、MM、是否揭曉、作答結果） */
-async function loadQuestion(date, review) {
+async function loadQuestion(date, review, rp) {
   const i = INDEX.indexOf(date), pd = INDEX.slice(i - DAYS_BEFORE, i);
   setBusy(true);
   try {
     const [day, ...prior] = await Promise.all([dayData(date), ...pd.map(dayData)]);
     if (!day || prior.some(p => !p)) throw new Error('missing');
-    Q = { date, day, prior: prior.map((p, k) => ({ date: pd[k], ...p })), n: 1, revealed: false, rec: null };
+    Q = { date, day, prior: prior.map((p, k) => ({ date: pd[k], ...p })), n: 1, revealed: false, rec: null, rp: rp ? { id: newId(), at: new Date().toISOString(), pos: null, trades: [], done: false } : null };
     MMMODE = false;
     if (review) {
       const f = review.fav; Q.review = review; Q.n = Math.max(1, Math.min(f.n, day.b.length - 1));
@@ -437,7 +454,8 @@ async function loadQuestion(date, review) {
       if (f.p0 != null && f.p1 != null) Q.mm = { p0: f.p0, p1: f.p1, t0: f.t0, t1: f.t1 };
       if (f.tf && f.tf !== TF) { TF = f.tf; applyStyle(); }
       document.getElementById('note').value = f.note || '';
-    } else qCount++;
+    } else if (rp) document.getElementById('note').value = '';
+    else qCount++;
     chart.priceScale('right').applyOptions({ autoScale: true }); AUTOSYNC();
     buildSeries(); drawLevels(); drawMM(); frame(); renderQ();
     if (Q.mm && Q.mm.t0 == null) { const lb = lastBar(); Q.mm.t0 = Q.mm.t1 = lb && lb.time; drawMM(); }
@@ -445,7 +463,7 @@ async function loadQuestion(date, review) {
   setBusy(false);
 }
 /* 可以一直看到收盤前（最後要留一根給進場後的結果） */
-const maxN = () => Math.min(79, Q.day.b.length - 1);
+const maxN = () => Q.rp ? Q.day.b.length : Math.min(79, Q.day.b.length - 1);
 function nextBar() { if (!Q || Q.revealed || Q.review || Q.n >= maxN() || TF !== 5) return; Q.n++; buildSeries(); renderQ();
   /* 最新一根快碰到右邊時，畫面往右挪一段 */
   const ts = chart.timeScale(), r = ts.getVisibleLogicalRange(), last = DAYCNT.slice(0, -1).reduce((t, x) => t + x, 0) + DAYCNT[DAYCNT.length - 1] - 1;
@@ -508,20 +526,29 @@ function flash(t) { setMsg(t); }
 function setBusy(b) { main.querySelectorAll('.ctl button, #skip').forEach(x => { if (b) x.disabled = true; }); if (!b && Q) renderQ(); }
 function shell() {
   main.innerHTML = `
-    <div class="qbar"><span class="qno" id="qno"></span><span class="pill" id="qbar"></span><span class="hint" id="qmsg"></span><button class="btn sm" id="skip" type="button">換一題</button><button class="btn sm" id="redo" type="button" hidden>重做這題</button><span class="sp"></span>
+    <div class="qbar"><span class="qno" id="qno"></span><span class="pill" id="qbar"></span><span class="hint" id="qmsg"></span><button class="btn sm pq" id="skip" type="button">換一題</button><button class="btn sm pq" id="redo" type="button" hidden>重做這題</button>
+      <span class="rq"><button class="btn sm" id="rpPrev" type="button" title="前一個交易日">◀</button> <select class="rps" id="rpDay" aria-label="複測日期"></select> <button class="btn sm" id="rpNext" type="button" title="下一個交易日">▶</button></span><span class="sp"></span>
       <span class="seg" role="group" aria-label="週期"><button type="button" data-tf="5">5 分</button><button type="button" data-tf="15">15 分</button></span>
       <span class="seg" role="group" aria-label="圖型"><button type="button" data-s="candle">K棒</button><button type="button" data-s="line">收盤線</button></span></div>
     <div class="chartbox"><div id="chart"></div><div class="ohlc" id="ohlc"></div><div class="res" id="res"></div><button class="btn nextb" id="next" type="button"></button><button class="autob on" id="autob" type="button" title="價格軸自動調整（按一下開／關）">auto</button></div>
     <div class="legend"><span><i style="border-color:var(--ema)"></i>EMA20</span><span><i class="d" style="border-color:var(--level)"></i>昨收／昨高／昨低</span><span>淺色直條＝每天開盤</span></div>
     <div class="ctl" id="ctl">
-      <button class="btn fav" id="favb" type="button">☆ 收藏</button>
-      <button class="btn" id="peek" type="button">看全天</button>
+      <button class="btn fav pq" id="favb" type="button">☆ 收藏</button>
+      <button class="btn pq" id="peek" type="button">看全天</button>
       <input class="note" id="note" placeholder="理由（選填）：背景／力道／結構" maxlength="200">
       <button class="btn" id="mmb" type="button">畫 MM</button>
-      <button class="btn pri" id="ord" type="button">下單</button>
-      <button class="btn" id="pass" type="button">不做</button>
+      <button class="btn pri pq" id="ord" type="button">下單</button>
+      <button class="btn pq" id="pass" type="button">不做</button>
+      <label class="rq hint">口數 <select class="rps" id="rpQty">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(q => `<option>${q}</option>`).join('')}</select></label>
+      <button class="btn buy rq" id="rpBuy" type="button">買進</button>
+      <button class="btn sell rq" id="rpSell" type="button">放空</button>
+      <button class="btn pri rq" id="rpExit" type="button">離場</button>
+      <button class="btn rq" id="rpEnd" type="button">結束這天</button>
+      <button class="btn rq" id="rpAgain" type="button">重新複測這天</button>
     </div>
-    <div class="plan" id="plan"></div>`;
+    <div class="plan pq" id="plan"></div>
+    <div class="rpinfo rq" id="rpInfo"></div>
+    <div class="rpsum rq" id="rpSum"></div>`;
   makeChart(document.getElementById('chart'));
   document.getElementById('next').addEventListener('click', nextBar);
   document.getElementById('peek').addEventListener('click', revealOnly);
@@ -534,17 +561,29 @@ function shell() {
   document.getElementById('ord').addEventListener('click', order);
   document.getElementById('pass').addEventListener('click', pass);
   document.getElementById('favb').addEventListener('click', addFav);
+  document.getElementById('rpBuy').addEventListener('click', () => rpOpen(1));
+  document.getElementById('rpSell').addEventListener('click', () => rpOpen(-1));
+  document.getElementById('rpExit').addEventListener('click', rpClose);
+  document.getElementById('rpEnd').addEventListener('click', rpEnd);
+  document.getElementById('rpAgain').addEventListener('click', () => Q && loadReplay(Q.date));
+  document.getElementById('rpPrev').addEventListener('click', () => rpStep(-1));
+  document.getElementById('rpNext').addEventListener('click', () => rpStep(1));
+  document.getElementById('rpDay').addEventListener('change', (e) => loadReplay(e.target.value));
+  try { document.getElementById('rpQty').value = localStorage.getItem('practice-rpqty') || '1'; } catch (e) {}
+  document.getElementById('rpQty').addEventListener('change', (e) => { try { localStorage.setItem('practice-rpqty', e.target.value); } catch (x) {} });
 }
 const sg = (x, d = 2) => (x >= 0 ? '+' : '') + x.toFixed(d);
 const DIRN = { 1: '多單', '-1': '空單' };
 function outTxt(o) { return o.t === 'win' ? `達到（#${o.bar}，${sg(o.r)}R）` : o.t === 'stop' ? `先停損（#${o.bar}，-1R）` : `收盤出場（${sg(o.r)}R）`; }
 function renderQ() {
+  main.classList.toggle('rpmode', !!Q.rp);
+  if (Q.rp) { renderRP(); return; }
   document.getElementById('qno').textContent = Q.review ? '收藏回看' : `第 ${qCount} 題`;
   document.getElementById('qbar').textContent = Q.revealed ? `${mdw(Q.date)}　開盤 ${tpe(openUtc(Q.date))}` : Q.review ? `${mdw(Q.date)}　當時看到 #${Q.n}` : (Q.redo ? '重做（不計成績）　' : '') + `已看 #${Q.n}`;
   setMsg(Q.review ? '收藏當時的畫面；要練同一張圖請按「重做這題」' : Q.revealed ? '' : MMMODE ? (Q.mm && Q.mm.p0 != null ? '再點 1（這段走勢的終點）' : '在圖上點 0（這段走勢的起點）') : (Q.n >= maxN() ? '已到收盤前最後一根，畫 MM 下單或選不做' : Q.n > N90 ? '已過開盤 90 分鐘' : '先問自己：背景？力道？結構？'));
   const nx = document.getElementById('next');
   nx.textContent = TF !== 5 ? '切回 5 分才能下一根' : (Q.n >= maxN() ? '已到最後' : `下一根 #${Q.n + 1}`); nx.disabled = Q.revealed || !!Q.review || Q.n >= maxN() || TF !== 5;
-  const sk = document.getElementById('skip'); sk.disabled = false; sk.textContent = Q.revealed ? '下一題' : '換一題'; sk.className = 'btn sm' + (Q.revealed ? ' pri' : '');
+  const sk = document.getElementById('skip'); sk.disabled = false; sk.textContent = Q.revealed ? '下一題' : '換一題'; sk.className = 'btn sm pq' + (Q.revealed ? ' pri' : '');
   document.getElementById('redo').hidden = !Q.revealed && !Q.review;
   /* 收藏回看：只留「取消收藏」和「重做這題」 */
   ['skip', 'next', 'mmb', 'ord', 'pass', 'peek'].forEach(k => { document.getElementById(k).hidden = !!Q.review; });
@@ -666,6 +705,135 @@ function renderFavs() {
 }
 async function openFav(id) { const f = FAVS[id]; if (!f) return; showTab('fav', 'play'); await loadQuestion(f.date, { id, fav: f }); }
 
+/* ---------- 複測：照日期重走一遍，自己按買進／放空，按「下一根」看走勢，按「離場」才結算；同一天可以重複下單 ----------
+   進出場都用當下那根 5 分 K 的收盤價；損益＝點數 × $5 × 口數 − 手續費（每口來回 $1.22，和日誌的成交紀錄一樣）
+   紀錄存在 preplay（practice/replay.json），一次複測一筆；和練習的成績、收藏分開 */
+const FEE = 1.22;
+let RPS = {}; const ACT = new Map();
+const money = (v) => (v < 0 ? '−$' : '+$') + Math.abs(v).toFixed(2);
+const rpRec = () => { const r = Q.rp; return { date: Q.date, at: r.at, upd: new Date().toISOString(), done: r.done, net: +r.trades.reduce((t, x) => t + x.pnl, 0).toFixed(2), trades: r.trades }; };
+function rpDefault() {
+  let d = null; try { d = localStorage.getItem('practice-rpdate'); } catch (e) {}
+  const ok = (x) => x && INDEX.indexOf(x) >= DAYS_BEFORE;
+  if (ok(d)) return d;
+  return INDEX.find(x => x >= '2026-09-01' && ok(x)) || INDEX[DAYS_BEFORE];
+}
+async function loadReplay(date) {
+  if (!date) return;
+  try { localStorage.setItem('practice-rpdate', date); } catch (e) {}
+  MMMODE = false; await loadQuestion(date, null, true);
+  rpFillDays(); rpActual(date).then(() => { if (Q && Q.rp) renderQ(); });
+}
+function rpStep(d) { if (!Q) return; const i = INDEX.indexOf(Q.date) + d; if (i >= DAYS_BEFORE && i < INDEX.length) loadReplay(INDEX[i]); }
+/* 每日檢討那天的實際損益（雲端版沒有日誌資料，就不比） */
+async function rpActual(date) {
+  if (ACT.has(date)) return ACT.get(date);
+  let v = null; try { const d = snap(await DB.doc('jdays/' + date).get()); if (d && d.stats) v = { net: d.stats.net, n: (d.pos || []).length }; } catch (e) {}
+  ACT.set(date, v); return v;
+}
+/* 每天最新的一次複測 */
+function rpLatest() { const m = new Map(); Object.values(RPS).forEach(r => { const o = m.get(r.date); if (!o || (r.upd || r.at) > (o.upd || o.at)) m.set(r.date, r); }); return m; }
+function rpFillDays() {
+  const sel = document.getElementById('rpDay'); if (!sel || !Q) return;
+  const last = rpLatest(), byM = new Map();
+  INDEX.slice(DAYS_BEFORE).forEach(d => { const m = d.slice(0, 7); if (!byM.has(m)) byM.set(m, []); byM.get(m).push(d); });
+  sel.innerHTML = [...byM.entries()].reverse().map(([m, ds]) => `<optgroup label="${m.replace('-', '/')}">` + ds.map(d => { const r = last.get(d); return `<option value="${d}">${d.slice(5).replace('-', '/')}${mdw(d).slice(mdw(d).indexOf('（'))}${r ? `　${r.done ? '✓' : '…'} ${money(r.net)}` : ''}</option>`; }).join('') + '</optgroup>').join('');
+  sel.value = Q.date;
+}
+const curPx = () => Q.day.b[Q.n - 1][3];
+function rpOpen(dir) {
+  const r = Q && Q.rp; if (!r || r.pos || r.done) return;
+  const qty = Math.max(1, +document.getElementById('rpQty').value || 1);
+  r.pos = { dir, qty, n0: Q.n, entry: curPx(), note: document.getElementById('note').value.trim() };
+  document.getElementById('note').value = ''; buildSeries(); renderQ();
+}
+function rpClose() {
+  const r = Q && Q.rp; if (!r || !r.pos) return;
+  const p = r.pos, exit = curPx(), pts = Math.round((exit - p.entry) * p.dir * 100) / 100;
+  const t = { dir: p.dir, qty: p.qty, n0: p.n0, entry: p.entry, n1: Q.n, exit, pts, pnl: Math.round((pts * 5 * p.qty - FEE * p.qty) * 100) / 100, note: [p.note, document.getElementById('note').value.trim()].filter(Boolean).join(' ／ ') };
+  r.trades.push(t); r.pos = null; document.getElementById('note').value = '';
+  rpSave(); buildSeries(); renderQ();
+}
+function rpEnd() {
+  const r = Q && Q.rp; if (!r || r.done) return;
+  if (r.pos) rpClose();
+  r.done = true; Q.revealed = true; MMMODE = false;
+  rpSave(); buildSeries(); frame(); renderQ();
+}
+async function rpSave() {
+  const rec = rpRec(); RPS[Q.rp.id] = rec; rpFillDays();
+  try { await DB.doc('preplay/' + Q.rp.id).set(rec); } catch (e) { flash('複測紀錄沒有存成功'); }
+}
+/* 圖上的進出場標記：買進▲、放空▼，離場●標損益 */
+function rpMarkers() {
+  if (!Q || !Q.rp) return [];
+  const k = Q.prior.length, tAt = (n) => snapT(Date.UTC(2000, 0, 3 + k) / 1000 + (570 + 5 * (n - 1)) * 60), out = [];
+  const ent = (p) => out.push({ time: tAt(p.n0), position: p.dir > 0 ? 'belowBar' : 'aboveBar', shape: p.dir > 0 ? 'arrowUp' : 'arrowDown', color: css(p.dir > 0 ? '--bull' : '--bear'), text: `${p.qty}` });
+  Q.rp.trades.forEach(t => { ent(t); out.push({ time: tAt(t.n1), position: t.dir > 0 ? 'aboveBar' : 'belowBar', shape: 'circle', color: css(t.pnl >= 0 ? '--ok' : '--no'), text: money(t.pnl).replace('.00', '') }); });
+  if (Q.rp.pos) ent(Q.rp.pos);
+  return out.filter(m => m.time != null).sort((a, b) => a.time - b.time);
+}
+function renderRP() {
+  const r = Q.rp, done = r.done, p = r.pos, last = Q.n >= maxN();
+  document.getElementById('qno').textContent = '複測';
+  document.getElementById('qbar').textContent = `已看 #${Q.n}${done ? '　已結束' : ''}`;
+  setMsg(done ? '這天已結束，可以重新複測或換一天' : MMMODE ? (Q.mm && Q.mm.p0 != null ? '再點 1（這段走勢的終點）' : '在圖上點 0（這段走勢的起點）')
+    : p ? (last ? '已到最後一根，請離場或按「結束這天」' : '持倉中：按「下一根」看走勢，按「離場」用這根收盤出場')
+    : (last ? '已到最後一根，按「結束這天」' : `會用 #${Q.n} 收盤價進場：選口數後按買進或放空`));
+  const nx = document.getElementById('next');
+  nx.hidden = done; nx.textContent = TF !== 5 ? '切回 5 分才能下一根' : (last ? '已到最後' : `下一根 #${Q.n + 1}`); nx.disabled = done || last || TF !== 5;
+  const mb = document.getElementById('mmb'); mb.disabled = done; mb.textContent = MMMODE ? '取消畫 MM' : (Q.mm && Q.mm.p1 != null ? '重畫 MM' : '畫 MM'); mb.classList.toggle('on', MMMODE);
+  document.getElementById('chart').style.cursor = MMMODE ? 'crosshair' : '';
+  /* setBusy 載入時會把按鈕都停用，這裡每次都重新設定 */
+  ['rpBuy', 'rpSell'].forEach(k => { const b = document.getElementById(k); b.hidden = !!p || done; b.disabled = false; });
+  ['rpEnd', 'rpAgain'].forEach(k => { document.getElementById(k).disabled = false; });
+  const xb = document.getElementById('rpExit'); xb.hidden = !p; xb.disabled = false; xb.textContent = p ? `離場（#${Q.n} 收盤 ${f2(curPx())}）` : '離場';
+  document.getElementById('rpQty').disabled = !!p || done;
+  document.getElementById('rpEnd').hidden = done; document.getElementById('rpAgain').hidden = !done && !r.trades.length;
+  const note = document.getElementById('note'); note.disabled = done; note.placeholder = p ? '離場理由（選填）' : '進場理由（選填）';
+  const i = INDEX.indexOf(Q.date); document.getElementById('rpPrev').disabled = i <= DAYS_BEFORE; document.getElementById('rpNext').disabled = i >= INDEX.length - 1;
+  document.getElementById('res').className = 'res';
+  /* 持倉、帳面、今天合計 */
+  const info = document.getElementById('rpInfo'); info.innerHTML = '';
+  const real = r.trades.reduce((t, x) => t + x.pnl, 0), un = p ? (curPx() - p.entry) * p.dir * 5 * p.qty - FEE * p.qty : 0;
+  if (p) info.append(el('span', p.dir > 0 ? 'tag bull' : 'tag bear', `${DIRN[p.dir]} ${p.qty} 口`), el('span', null, `進場 ${f2(p.entry)}（#${p.n0}）`), el('span', un >= 0 ? 'ok' : 'no', `帳面 ${money(un)}（${sg((curPx() - p.entry) * p.dir)} 點）`));
+  if (r.trades.length || p) info.append(el('span', real >= 0 ? 'ok' : 'no', `已實現 ${money(real)}（${r.trades.length} 筆）`), el('span', real + un >= 0 ? 'ok' : 'no', `合計 ${money(real + un)}`));
+  if (real + un <= -500) info.append(el('span', 'warn', '已超過每日停損 −$500'));
+  /* 這天的交易、這個月的複測總覽 */
+  const sum = document.getElementById('rpSum');
+  /* 正在寫某一筆的檢討時不重畫（例如存檔後資料回來），免得打到一半被洗掉 */
+  const ae = document.activeElement; if (ae && ae.classList && ae.classList.contains('rpmemo') && sum.contains(ae)) return;
+  sum.innerHTML = '';
+  if (r.trades.length) {
+    sum.append(el('h3', null, '這次複測的交易'));
+    const t = el('table'), w = el('div', 'scroll');
+    t.innerHTML = '<tr><th></th><th>方向</th><th class="n">口數</th><th class="n">進場</th><th class="n">出場</th><th class="n">點數</th><th class="n">損益</th><th>理由</th><th>檢討</th></tr>' + r.trades.map((x, j) =>
+      `<tr><td>${j + 1}</td><td class="${x.dir > 0 ? 'ok' : 'no'}">${DIRN[x.dir]}</td><td class="n">${x.qty}</td><td class="n">#${x.n0} ${f2(x.entry)}</td><td class="n">#${x.n1} ${f2(x.exit)}</td><td class="n">${sg(x.pts)}</td><td class="n ${x.pnl >= 0 ? 'ok' : 'no'}">${money(x.pnl)}</td><td class="t"></td><td class="t"></td></tr>`).join('');
+    r.trades.forEach((x, j) => {
+      t.rows[j + 1].cells[7].textContent = x.note || '';
+      /* 離場後每一筆旁邊可以寫一句檢討（例如沒遵守哪條規則），離開輸入框或按 Enter 就存 */
+      const inp = el('input', 'note rpmemo'); inp.maxLength = 200; inp.placeholder = '寫一句：做對／做錯了什麼'; inp.value = x.memo || ''; inp.setAttribute('aria-label', `第 ${j + 1} 筆的檢討`);
+      const commit = () => { const v = inp.value.trim(); if (v === (x.memo || '')) return; x.memo = v; rpSave(); };
+      inp.addEventListener('change', commit); inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+      inp.addEventListener('blur', () => setTimeout(() => { if (Q && Q.rp) renderQ(); }, 0));
+      t.rows[j + 1].cells[8].append(inp);
+    });
+    w.append(t); sum.append(w);
+  }
+  const m = Q.date.slice(0, 7), last2 = rpLatest(), days = [...last2.values()].filter(x => x.date.slice(0, 7) === m).sort((a, b) => a.date.localeCompare(b.date));
+  if (days.length) {
+    sum.append(el('h3', null, `${m.replace('-', '/')} 複測總覽（每天取最新一次）`));
+    days.forEach(x => { if (!ACT.has(x.date)) rpActual(x.date).then(() => { if (Q && Q.rp) renderQ(); }); });
+    let tr = 0, ta = 0, na = 0;
+    const t = el('table'), w = el('div', 'scroll');
+    t.innerHTML = '<tr><th>日期</th><th class="n">筆數</th><th class="n">複測損益</th><th class="n">實際損益</th><th class="n">差</th><th></th></tr>' + days.map(x => {
+      const a = ACT.get(x.date); tr += x.net; if (a) { ta += a.net; na++; }
+      return `<tr><td>${mdw(x.date)}</td><td class="n">${x.trades.length}</td><td class="n ${x.net >= 0 ? 'ok' : 'no'}">${money(x.net)}</td><td class="n">${a ? money(a.net) : '—'}</td><td class="n">${a ? money(x.net - a.net) : '—'}</td><td class="hint">${x.done ? '' : '沒做完'}</td></tr>`; }).join('')
+      + `<tr><td><b>合計</b></td><td class="n">${days.reduce((t2, x) => t2 + x.trades.length, 0)}</td><td class="n ${tr >= 0 ? 'ok' : 'no'}"><b>${money(tr)}</b></td><td class="n">${na ? money(ta) : '—'}</td><td class="n">${na === days.length ? money(tr - ta) : '—'}</td><td></td></tr>`;
+    w.append(t); sum.append(w);
+  }
+}
+
 /* ---------- 鍵盤：→ 或空白鍵下一根，M 畫 MM，Enter 下單（揭曉後是下一題），Esc 取消畫 MM ---------- */
 document.addEventListener('keydown', (e) => {
   if (!Q || e.target.tagName === 'INPUT' || document.getElementById('view-play').hidden) return;
@@ -673,7 +841,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextBar(); }
   else if (e.key === 'm' || e.key === 'M') toggleMM();
   else if (e.key === 'Escape' && MMMODE) { MMMODE = false; Q.hover = null; if (Q.mm && Q.mm.p1 == null) Q.mm = null; drawMM(); renderQ(); }
-  else if (e.key === 'Enter' && !Q.review) { if (Q.revealed) newQuestion(); else order(); }
+  else if (e.key === 'Enter' && !Q.review) { if (Q.rp) { if (Q.rp.pos) rpClose(); } else if (Q.revealed) newQuestion(); else order(); }
 });
 
 /* ---------- 啟動 ---------- */
@@ -687,6 +855,7 @@ applyTheme();
   if (INDEX.length <= DAYS_BEFORE) { document.getElementById('loading').textContent = '還沒有練習用的 K 線資料。'; return; }
   DB.collection('panswers').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); ANS = Object.assign(m, Q && Q.recId ? { [Q.recId]: Q.rec } : {}); renderStats(); }, () => {});
   DB.collection('pfavs').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); FAVS = m; renderFavs(); }, () => {});
+  DB.collection('preplay').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); RPS = Object.assign(m, Q && Q.rp && Q.rp.trades.length ? { [Q.rp.id]: rpRec() } : {}); if (Q && Q.rp) { rpFillDays(); renderQ(); } }, () => {});
   shell();
   /* 從每日檢討的「到開盤練習重練這天」過來：practice.html?date=YYYY-MM-DD
      載入那天後直接走「重做這題」同一段程式（redo），所以邏輯和重做完全一樣，只是日期由每日檢討指定 */
