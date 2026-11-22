@@ -85,7 +85,8 @@ select{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);bord
 .lwbox{position:relative;height:min(68vh,620px);min-height:380px;padding:0;overflow:hidden}
 .autob{position:absolute;right:6px;bottom:4px;z-index:3;font:11px var(--f-mono);line-height:18px;padding:0 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink-3);cursor:pointer}
 .autob.on{color:var(--warn);border-color:var(--warn)}
-.mmtools{display:inline-flex;gap:6px;align-items:center}.mmtools .linkbtn{font-size:12px;padding:2px 9px}.mmb.on{border-color:var(--warn);color:var(--warn)}
+.mmtools{display:inline-flex;gap:6px;align-items:center}
+.mmdel{position:absolute;z-index:4;width:18px;height:18px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink-2);font:600 10px/16px var(--f-sans);text-align:center;cursor:pointer}.mmdel:hover{color:var(--bear);border-color:var(--bear)}.mmtools .linkbtn{font-size:12px;padding:2px 9px}.mmb.on{border-color:var(--warn);color:var(--warn)}
 .lwtip{position:absolute;top:20px;transform:translateX(-50%);z-index:3;display:none;pointer-events:none;white-space:nowrap;font:500 11px var(--f-mono);background:var(--ink);color:var(--bg);padding:1px 6px;border-radius:4px}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-2);padding:0 10px 10px;align-items:center}
 .legend i{display:inline-block;margin-right:5px;vertical-align:-1px}
@@ -635,7 +636,15 @@ function drawLW(box,day,hov,onPick,tools){
   }
   /* 畫 MM：和開盤練習一樣（級數 -1、0、0.5、1、2、3、4）。按「畫 MM」後先點 0 再點 1，會吸附到附近 K 棒的開高低收；Esc 取消。存在 drawings/{日期} */
   const MLV=[-1,0,.5,1,2,3,4],tick=x=>Math.round(x*4)/4;
-  let MMS=((DRAW[day.date]||{}).mm||[]).slice(),MMMODE=false,MMP=null,MMH=null;
+  let MMS=((DRAW[day.date]||{}).mm||[]).slice(),MMMODE=false,MMP=null,MMH=null,MMR=[],MMSEL=-1;
+  /* 刪除單一 MM：滑過（手機是點一下）某個 MM，它左上角出現 ✕，按了只刪這一個 */
+  const del=h('button','mmdel','✕');del.type='button';del.title='刪除這個 MM';del.setAttribute('aria-label','刪除這個 MM');del.hidden=true;box.append(del);
+  const mmAt=(x,y)=>{for(let i=MMR.length-1;i>=0;i--){const r=MMR[i];if(r&&x>=r.L&&x<=r.R+24&&y>=r.T-24&&y<=r.B+6)return i}return -1};
+  function placeDel(){const r=MMSEL>=0&&!MMMODE?MMR[MMSEL]:null;if(!r){del.hidden=true;return}del.hidden=false;del.style.left=Math.max(0,r.L+95-20)+'px';del.style.top=Math.max(0,r.T-20)+'px'}
+  const selMM=i=>{if(i===MMSEL)return;MMSEL=i;placeDel()};
+  box.addEventListener('mousemove',ev=>{if(MMMODE)return;const b=box.getBoundingClientRect();selMM(mmAt(ev.clientX-b.left,ev.clientY-b.top))});
+  box.addEventListener('mouseleave',()=>selMM(-1));
+  del.addEventListener('click',ev=>{ev.stopPropagation();if(MMSEL<0||MMSEL>=MMS.length)return;MMS.splice(MMSEL,1);MMSEL=-1;del.hidden=true;saveMM();PRIM.req&&PRIM.req()});
   const rgba=(c,a)=>{const m=/^#([0-9a-f]{6})$/i.exec(String(c).trim());if(!m)return c;const n=parseInt(m[1],16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`};
   function drawOneMM(g,hr,vr,Y,mm,end){
     const x0=xAt(mm.t0);if(x0==null)return;const x1=end&&end.t!=null?xAt(end.t):null;
@@ -648,6 +657,9 @@ function drawLW(box,day,hov,onPick,tools){
       g.strokeStyle=col;g.lineWidth=Math.max(1,Math.round(hr));g.setLineDash(k===.5?[4*hr,3*hr]:[]);g.beginPath();g.moveTo(l,Math.round(y)+.5);g.lineTo(r,Math.round(y)+.5);g.stroke();
       g.fillStyle=k===.5?cT:col;g.fillText(`${k}（${fmt(pr)}）`,l-6*hr,y)});
     g.setLineDash([]);
+    /* 回傳這個 MM 佔的範圍（CSS 像素），給滑過時顯示刪除鈕用；左邊多留級數文字的寬度 */
+    const ys=ks.map(k=>Y(tick(mm.p0+u*k))).filter(y=>y!=null);if(!ys.length)return null;
+    return {L:L-95,R,T:Math.min(...ys)/vr,B:Math.max(...ys)/vr};
   }
   /* 自己畫的部分：進出場、虛線、部位編號、收盤線、規則觸發線、觀察紀錄的旗子 */
   const FLAGS=[],HITS=[];
@@ -692,7 +704,7 @@ function drawLW(box,day,hov,onPick,tools){
         HITS.push({k,x:lx,y:ly-4})});
       /* 下方損益區的標示（放右邊，避開左下角的 TradingView 標誌） */
       {const py=v=>{const y=pnl.priceToCoordinate(v);return y==null?null:y*vr};
-        MMS.forEach(m=>drawOneMM(g,hr,vr,Y,{p0:m.p0,t0:m.t0},{p:m.p1,t:m.t1}));if(MMP)drawOneMM(g,hr,vr,Y,MMP,MMH);
+        MMR=MMS.map(m=>drawOneMM(g,hr,vr,Y,{p0:m.p0,t0:m.t0},{p:m.p1,t:m.t1}));if(MMP)drawOneMM(g,hr,vr,Y,MMP,MMH);requestAnimationFrame(placeDel);
         [[0,'0','--ink-2','損益'],[-500,'-500','--bear']].forEach(([v,s,c,n])=>{const y=py(v);if(y!=null)tag(s,y,css(c),n)});
         /* 損益線上，每筆出場的位置打一個小點（賺綠、賠紅） */
         POS.forEach((p,k)=>{const st=exitSteps(k);if(!st.length)return;const x=xMin(st[st.length-1][0]),y=py(p[5]);if(x==null||y==null)return;g.fillStyle=css(p[4]>=0?'--bull':'--bear');g.beginPath();g.arc(x*hr,y,2.5*hr,0,Math.PI*2);g.fill()})}
@@ -709,13 +721,12 @@ function drawLW(box,day,hov,onPick,tools){
     /* 和開盤練習一樣：收盤價和前一根收盤的漲跌（點數、%），前一日第一根沒有前一根就不顯示 */
     const pb=v.prev?PREV[v.i-1]:(v.i?BARS[v.i-1]:(day.prevBars||[]).at(-1)),pc=pb?pb[3]:null,d=pc!=null?b[3]-pc:null,sg=x=>(x>=0?'+':'')+x.toFixed(2);
     hov.innerHTML=`${v.prev?'前一日 ':''}#${v.i+1} ${tlabel(v.i*5)}　開 <b>${fmt(b[0])}</b> 高 <b>${fmt(b[1])}</b> 低 <b>${fmt(b[2])}</b> 收 <b>${fmt(b[3])}</b>`+(d!=null?`　<span style="color:${css(d>=0?'--bull':'--bear')}">${sg(d)}（${sg(d/pc*100)}%）</span>`:'')+(b.length>4&&b[4]!=null?`　<span style="color:${css('--ema')}">EMA ${fmt(b[4])}</span>`:'')});
-  const mb=h('button','linkbtn mmb','畫 MM'),mc=h('button','linkbtn','清除 MM');mb.type=mc.type='button';mc.title='清除這一天畫的 MM';
-  const upd=()=>{mc.hidden=!MMS.length;mb.textContent=MMMODE?(MMP?'再點 1（終點）':'點 0（起點）'):'畫 MM';mb.classList.toggle('on',MMMODE);box.style.cursor=MMMODE?'crosshair':''};
-  const setMode=on=>{MMMODE=on;MMP=null;MMH=null;upd();PRIM.req&&PRIM.req()};
+  const mb=h('button','linkbtn mmb','畫 MM');mb.type='button';
+  const upd=()=>{mb.textContent=MMMODE?(MMP?'再點 1（終點）':'點 0（起點）'):'畫 MM';mb.classList.toggle('on',MMMODE);box.style.cursor=MMMODE?'crosshair':''};
+  const setMode=on=>{MMMODE=on;MMP=null;MMH=null;MMSEL=-1;del.hidden=true;upd();PRIM.req&&PRIM.req()};
   const saveMM=()=>{upd();const doc={date:day.date,mm:MMS,updatedAt:new Date().toISOString()};DRAW[day.date]=doc;if(DB)DB.doc('drawings/'+day.date).set(doc).catch(()=>{})};
   mb.addEventListener('click',()=>setMode(!MMMODE));
-  mc.addEventListener('click',()=>{MMS=[];setMode(false);saveMM()});
-  if(tools)tools.append(mb,mc);upd();
+  if(tools)tools.append(mb);upd();
   const esc=e=>{if(e.key==='Escape'&&MMMODE)setMode(false)};addEventListener('keydown',esc);
   chart.subscribeCrosshairMove(p=>{if(!MMMODE||!MMP||!p||!p.point)return;const pr=cs.coordinateToPrice(p.point.y);if(pr==null)return;MMH={p:tick(pr),t:p.time!=null?p.time:ts.coordinateToTime(p.point.x)};PRIM.req&&PRIM.req()});
   /* 點旗子看觀察紀錄、點進出場標記選那一筆部位（畫 MM 時改成點 MM 的兩個點） */
@@ -726,6 +737,7 @@ function drawLW(box,day,hov,onPick,tools){
       price=tick(price);
       if(!MMP){MMP={p0:price,t0:t};MMH=null;upd()}else if(price!==MMP.p0){MMS.push({p0:MMP.p0,t0:MMP.t0,p1:price,t1:t});MMMODE=false;MMP=null;MMH=null;saveMM()}
       PRIM.req&&PRIM.req();return}
+    const mi=mmAt(x,y);if(mi>=0&&mi!==MMSEL){selMM(mi)}
     const fl=FLAGS.find(f=>Math.abs(f.x-x)<=9&&y>=f.y-2&&y<=f.y+18);if(fl){ev.stopPropagation();obsPop({getBoundingClientRect:()=>({left:r.left+fl.x-8,top:r.top+fl.y})},fl.o);return}
     let best=null;HITS.forEach(t=>{const d=Math.hypot(t.x-x,t.y-y);if(d<=12&&(!best||d<best.d))best={d,k:t.k}});if(best)onPick(best.k)});
   /* auto：拖過價格軸會關掉自動調整，按一下恢復 */
@@ -745,7 +757,7 @@ function drawLW(box,day,hov,onPick,tools){
   {const ro=new ResizeObserver(()=>{if(box.clientWidth>0){ts.setVisibleLogicalRange({from:-.5-padFor(LAST+3),to:LAST+2});ro.disconnect()}});ro.observe(box)}
   /* 換配色時重新上色 */
   const mo2=new MutationObserver(()=>style());mo2.observe(document.documentElement,{attributes:true,attributeFilter:['data-mj']});
-  return {paint:()=>PRIM.req&&PRIM.req(),syncMM:()=>{if(MMMODE)return;MMS=((DRAW[day.date]||{}).mm||[]).slice();upd();PRIM.req&&PRIM.req()},destroy:()=>{mo2.disconnect();removeEventListener('keydown',esc);chart.remove()}};
+  return {paint:()=>PRIM.req&&PRIM.req(),syncMM:()=>{if(MMMODE)return;MMS=((DRAW[day.date]||{}).mm||[]).slice();MMSEL=-1;del.hidden=true;upd();PRIM.req&&PRIM.req()},destroy:()=>{mo2.disconnect();removeEventListener('keydown',esc);chart.remove()}};
 }
 
 /* review memos */
@@ -1146,7 +1158,7 @@ function pickJson(txt){const i=txt.indexOf('{"chart"');if(i<0)return null;for(le
 function openUtc(dayMs){return dayMs+((etParts(dayMs+12*3600e3).h===8)?13:14)*3600e3+30*60e3}
 async function fetchBars(day){
   const [Y,M,D]=day.date.split('-').map(Number),sd=Date.UTC(Y,M-1,D);let pd=sd-864e5;while([0,6].includes(new Date(pd).getUTCDay()))pd-=864e5;
-  const pOpen=openUtc(pd),sOpen=openUtc(sd),lastExit=Math.max(sOpen+390*60e3,...(day.trades||[]).map(r=>r[3]||0));
+  const pOpen=openUtc(pd),sOpen=openUtc(sd),lastExit=Math.max(sOpen+405*60e3,...(day.trades||[]).map(r=>r[3]||0));
   const p1=Math.floor((pOpen-3600e3)/1000),p2=Math.floor((Math.max(sOpen+395*60e3,lastExit+600e3))/1000);
   const url=`https://query1.finance.yahoo.com/v8/finance/chart/MES=F?interval=5m&period1=${p1}&period2=${p2}`;
   const o=await MCP.callTool('host:claude_browser','preview_start',{url});const tab=(resText(o).match(/tabId\s+([\w-]+)/)||[])[1];
@@ -1154,7 +1166,7 @@ async function fetchBars(day){
   const js=pickJson(resText(g));const res=js&&js.chart&&js.chart.result&&js.chart.result[0];if(!res)throw{code:'no_data'};
   const q=res.indicators.quote[0];let rows=res.timestamp.map((t,i)=>[t*1000,q.open[i],q.high[i],q.low[i],q.close[i]]).filter(r=>r[1]!=null&&r[4]!=null);
   const k=2/21;let e=null;rows.forEach(r=>{e=e==null?r[4]:r[4]*k+e*(1-k);r.push(Math.round(e*100)/100)});
-  const prev=rows.filter(r=>r[0]>=pOpen&&r[0]<pOpen+390*60e3),on=rows.filter(r=>r[0]>=pOpen+390*60e3&&r[0]<sOpen),endMs=Math.max(sOpen+390*60e3,lastExit+1);
+  const prev=rows.filter(r=>r[0]>=pOpen&&r[0]<pOpen+405*60e3),on=rows.filter(r=>r[0]>=pOpen+405*60e3&&r[0]<sOpen),endMs=Math.max(sOpen+405*60e3,lastExit+1);
   const dayRows=rows.filter(r=>r[0]>=sOpen&&r[0]<endMs);if(!dayRows.length)throw{code:'no_data'};
   const bars=dayRows.map(r=>[r[1],r[2],r[3],r[4],r[5]]);const lo=Math.min(...bars.map(b=>b[2])),hi=Math.max(...bars.map(b=>b[1]));
   const cand=[];if(prev.length){cand.push([prev[prev.length-1][4],'昨收'],[Math.max(...prev.map(r=>r[2])),'昨高'],[Math.min(...prev.map(r=>r[3])),'昨低'])}
