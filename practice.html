@@ -100,6 +100,7 @@ h1{font-size:20px;font-weight:500;margin:0}
 .seg button[aria-pressed="true"]{color:var(--ink);background:var(--bg)}
 .seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .nextb{position:absolute;right:72px;bottom:36px;z-index:4;box-shadow:0 3px 12px rgba(0,0,0,.25);background:color-mix(in srgb,var(--panel) 92%,transparent)}
+.mmdel{position:absolute;z-index:5;width:18px;height:18px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink-2);font:600 10px/16px var(--f-sans);text-align:center;cursor:pointer}.mmdel:hover{color:var(--bear);border-color:var(--bear)}
 .autob{position:absolute;right:6px;bottom:4px;z-index:3;font:11px var(--f-mono);line-height:18px;padding:0 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink-3);cursor:pointer}
 .autob.on{color:var(--accent);border-color:var(--accent)}
 #chart{position:absolute;inset:0}
@@ -253,7 +254,17 @@ const MMPRIM = {
   paneViews() { return [{ zOrder: () => 'top', renderer: () => ({ draw: drawMMCanvas }) }]; },
 };
 function drawMM() { if (MMPRIM.req) MMPRIM.req(); }
+/* 刪除 MM：滑過（手機點一下）畫好的 MM，左上角出現 ✕，按了就刪掉（和每日檢討一樣）；揭曉後、收藏回看、畫 MM 中不出現 */
+let MMRECT = null, MMHOV = false;
+const canDelMM = () => !!(Q && Q.mm && Q.mm.p1 != null && !MMMODE && !Q.revealed && !Q.review);
+function placeMMDel() {
+  const d = document.getElementById('mmdel'); if (!d) return;
+  if (!MMHOV || !MMRECT || !canDelMM()) { d.hidden = true; return; }
+  d.hidden = false; d.style.left = Math.max(0, MMRECT.x - 20) + 'px'; d.style.top = Math.max(0, MMRECT.T - 20) + 'px';
+}
+const inMM = (x, y) => !!MMRECT && x >= MMRECT.L && x <= MMRECT.R + 6 && y >= MMRECT.T - 24 && y <= MMRECT.B + 6;
 function drawMMCanvas(target) {
+  MMRECT = null; requestAnimationFrame(placeMMDel);
   if (!Q || !Q.mm || Q.mm.p0 == null || !chart) return;
   const ts = chart.timeScale(), x0 = ts.timeToCoordinate(snapT(Q.mm.t0));
   const end = Q.mm.p1 != null ? { p: Q.mm.p1, t: Q.mm.t1 } : Q.hover; if (x0 == null) return;
@@ -276,6 +287,7 @@ function drawMMCanvas(target) {
     });
     g.setLineDash([]);
   });
+  if (Q.mm.p1 != null) { const ys = ks.map(k => ema.priceToCoordinate(tick(Q.mm.p0 + u * k))).filter(y => y != null); if (ys.length) MMRECT = { x: L, L: L - 95, R, T: Math.min(...ys), B: Math.max(...ys) }; }
 }
 /* 進場：第 n 根收盤；之後逐根看先碰 -1 還是先到 2／3（同一根都碰到算停損），到 16:05 那根都沒有就收盤出場 */
 function simulate(b, n, lv, dir, entry) {
@@ -336,6 +348,15 @@ function makeChart(box) {
   ema.attachPrimitive(MMPRIM);
   styleChart();
   chart.subscribeCrosshairMove(showOHLC);
+  {
+    const wrap = box.parentElement, del = el('button', 'mmdel', '✕');
+    del.id = 'mmdel'; del.type = 'button'; del.title = '刪除這個 MM'; del.setAttribute('aria-label', '刪除這個 MM'); del.hidden = true; wrap.append(del);
+    const at = (ev) => { const r = wrap.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+    wrap.addEventListener('mousemove', (ev) => { const h = canDelMM() && inMM(...at(ev)); if (h !== MMHOV) { MMHOV = h; placeMMDel(); } });
+    wrap.addEventListener('mouseleave', () => { MMHOV = false; placeMMDel(); });
+    box.addEventListener('click', (ev) => { if (!MMMODE && canDelMM() && inMM(...at(ev))) { MMHOV = true; placeMMDel(); } });
+    del.addEventListener('click', (ev) => { ev.stopPropagation(); if (!canDelMM()) return; Q.mm = null; Q.hover = null; MMHOV = false; drawMM(); renderQ(); });
+  }
   /* 畫 MM：直接聽網頁的點擊（圖表本身的點擊事件，兩下點太快時第二下會被吃掉），算出價位；會吸附到附近 K 棒的開高低收 */
   box.addEventListener('click', (ev) => {
     if (!MMMODE || !Q || Q.revealed) return;
