@@ -20,7 +20,7 @@
 /* layout: header with tabs; daily review = verdict strip, chart beside position ledger, rule notes; overview = daily table + net bars; handbook = rules + case cards */
 :root{
   --bg:#f3f5f6; --panel:#ffffff; --ink:#15202b; --ink-2:#4d5b68; --ink-3:#8593a0;
-  --grid:#e2e7eb; --line:#cfd6dc; --bull:#13896b; --bear:#cf3f4f; --ema:#2b6fd6; --level:#9aa5af;
+  --grid:#e2e7eb; --line:#cfd6dc; --bull:#13896b; --bear:#cf3f4f; --ema:#2b6fd6; --level:#9aa5af; --daysep:#8b5cf6;
   --warn:#b8700d; --warn-bg:#fbf1e1; --stop-bg:rgba(207,63,79,.06);
   --f-sans:"IBM Plex Sans TC","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -28,16 +28,16 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f1418; --panel:#161d23; --ink:#e3e8ec; --ink-2:#b6c1ca; --ink-3:#8b98a3;
-  --grid:#25303a; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96;
+  --grid:#25303a; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96; --daysep:#a78bfa;
   --warn:#e7a441; --warn-bg:#2a2214; --stop-bg:rgba(236,97,112,.08); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1418; --panel:#161d23; --ink:#e3e8ec; --ink-2:#b6c1ca; --ink-3:#8b98a3;
-  --grid:#25303a; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96;
+  --grid:#25303a; --line:#34424d; --bull:#2fb88f; --bear:#ef6b79; --ema:#6aa2f2; --level:#7d8a96; --daysep:#a78bfa;
   --warn:#e7a441; --warn-bg:#2a2214; --stop-bg:rgba(236,97,112,.08); color-scheme:dark}
 /* 護眼：暖色、低眩光（預設） */
 :root[data-theme="eye"]{
   --bg:#e8e3d6; --panel:#f3eee2; --ink:#37332b; --ink-2:#5c564a; --ink-3:#878070;
-  --grid:#dcd4c2; --line:#cbc1ac; --bull:#2d7a58; --bear:#b04a40; --ema:#3a64aa; --level:#9e9684;
+  --grid:#dcd4c2; --line:#cbc1ac; --bull:#2d7a58; --bear:#b04a40; --ema:#3a64aa; --level:#9e9684; --daysep:#8a6bb8;
   --warn:#9c5f10; --warn-bg:#ece0c3; --stop-bg:rgba(176,74,64,.07); color-scheme:light}
 :root[data-theme="eye"] .chk-col{background:rgba(255,252,242,.45)}
 .ttl{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -147,6 +147,7 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .case .src{font-size:12px;color:var(--ink-3)}
 .linkbtn{font:500 13px var(--f-sans);background:none;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:4px 10px;cursor:pointer;justify-self:start}
 .daynav{padding:4px 10px;font-size:12px;line-height:1.4}
+a.linkbtn{text-decoration:none;display:inline-block}
 .linkbtn:disabled{opacity:.35;cursor:default}
 .linkbtn:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
@@ -284,6 +285,9 @@ table.days tr.link:hover{background:var(--warn-bg)}
 .bq-opt:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 .legend.top{padding:10px 14px 0;justify-content:flex-end}
 .legend.top .hover{margin-left:0;margin-right:auto}
+/* 滑過時的開高低收只用剩下的空間（太長就截掉），不會把右邊的開關和「畫 MM」擠到下一行、讓整張圖跳動；手機上固定獨占一行 */
+.legend.top .hover{flex:1 1 0;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media (max-width:760px){.legend.top .hover{flex-basis:100%}}
 .legend .tog{font-size:12px;color:var(--ink-2)}
 dialog.crop{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1100px,calc(100% - 24px));max-width:none;color:var(--ink);background:var(--panel)}
 dialog.crop::backdrop{background:rgba(21,32,43,.45)}
@@ -467,8 +471,8 @@ button.cx-wh[aria-pressed="false"]{opacity:.38;filter:grayscale(1);text-decorati
     <div class="daybar">
       <label for="daySel" class="sub">交易日</label>
       <button type="button" class="linkbtn daynav" id="dayPrev" title="前一個交易日" aria-label="前一個交易日" disabled>◀</button><select id="daySel" disabled><option>載入中…</option></select><button type="button" class="linkbtn daynav" id="dayNext" title="下一個交易日" aria-label="下一個交易日" disabled>▶</button>
-      <p class="sub" id="dayHint">時間為台灣時間。▲ 買進、▼ 放空、圓點是出場。右邊開關打開才顯示全部部位，關閉時點選哪一筆就只顯示哪一筆。</p>
-      <button type="button" class="linkbtn" id="importBtn" style="margin-left:auto">＋ 新增交易日</button>
+      <a class="linkbtn" id="practiceBtn" href="practice.html" target="_blank" rel="noopener" style="margin-left:auto" title="在開盤練習載入這一天，從開盤第一根重練（和「重做這題」一樣：會存下來，不算成績）">到開盤練習重練這天</a>
+      <button type="button" class="linkbtn" id="importBtn">＋ 新增交易日</button>
     </div>
     <div id="importWrap"></div>
     <div id="dayBody"><div class="panel empty">正在讀取日誌資料。收盤後把成交紀錄貼給 Claude，新的交易日就會出現在這裡。</div></div>
@@ -570,8 +574,12 @@ function obsPop(anchor,o){document.querySelectorAll('.obs-pop').forEach(x=>x.rem
 /* ===== 每日檢討的 K 線：TradingView Lightweight Charts（可縮放、拖曳、auto） =====
    時間用假的日期（前一日＝2000/1/3、當天＝2000/1/4，各自從 09:30 每 5 分一格），刻度和游標標籤自己寫成台灣時間與棒號 */
 let LW=null;
+/* 昨高／昨收／昨低：和開盤練習一樣，有前一日 K 線就直接從前一日算，三條都畫
+   （存檔的 levels 會把離當天價格太遠的濾掉，例如大跳空那天的昨高就不見了）；沒有前一日 K 線才用存檔的 */
+function prevLevels(day){const pv=day.prevBars||[];if(!pv.length)return (day.levels||[]).filter(([,t])=>!/夜盤/.test(t));
+  return [[Math.max(...pv.map(b=>b[1])),'昨高'],[pv[pv.length-1][3],'昨收'],[Math.min(...pv.map(b=>b[2])),'昨低']]}
 function drawLW(box,day,hov,onPick,tools){
-  const PREV=(showPrev&&day.prevBars)||[],BARS=day.bars||[],FILLS=day.fills||[],POS=day.pos||[],LEVELS=(day.levels||[]).filter(([,t])=>!/夜盤/.test(t)),openMin=day.openMin??(21*60+30);
+  const PREV=(showPrev&&day.prevBars)||[],BARS=day.bars||[],FILLS=day.fills||[],POS=day.pos||[],LEVELS=prevLevels(day),openMin=day.openMin??(21*60+30);
   /* 部位分批出場時，每次出場後的累計已實現損益（手續費依口數平均分攤）：[[出場分鐘, 累計], …] */
   const exitSteps=k=>{const p=POS[k],fs=FILLS.filter(f=>f[0]===k);if(!p||!fs.length)return[];const q=fs.reduce((a,f)=>a+f[6],0),gross=f=>(f[1]==='L'?f[5]-f[3]:f[3]-f[5])*5*f[6];
     const fee=(p[4]-fs.reduce((a,f)=>a+gross(f),0))/q,base=p[5]-p[4],m=new Map();fs.forEach(f=>m.set(f[4],(m.get(f[4])||0)+gross(f)+fee*f[6]));
@@ -584,7 +592,7 @@ function drawLW(box,day,hov,onPick,tools){
   const LBL=new Map(),BYT=new Map();
   PREV.forEach((b,i)=>{LBL.set(T0(i),{tick:i===0?'前一日':`#${i+1} ${tlabel(i*5)}`,full:`前一日 #${i+1} ${tlabel(i*5)}`});BYT.set(T0(i),{b,i,prev:true})});
   /* 右邊的標籤（前日價位、損益 0／-500）都寫在 K 棒右邊的空白裡；空白剛好放得下最寬的那個標籤 */
-  const TAGF='500 10.5px "IBM Plex Mono", ui-monospace, monospace',TAGS=[...(day.levels||[]).filter(([,t])=>!/夜盤/.test(t)).map(([p])=>fmt(p)),'0','-500'];
+  const TAGF='500 10.5px "IBM Plex Mono", ui-monospace, monospace',TAGS=[...LEVELS.map(([p])=>fmt(p)),'0','-500'];
   const TAGW=(()=>{const m=document.createElement('canvas').getContext('2d');m.font=TAGF;return Math.max(...TAGS.map(s=>m.measureText(s).width))+18})();
   const PAD=8;
   for(let i=0;i<ND+PAD;i++){LBL.set(T1(i),{tick:i===0?dname:`#${i+1} ${tlabel(i*5)}`,full:`#${i+1} ${tlabel(i*5)}`});if(BARS[i])BYT.set(T1(i),{b:BARS[i],i})}
@@ -595,7 +603,9 @@ function drawLW(box,day,hov,onPick,tools){
     layout:{attributionLogo:false},
     handleScale:{axisPressedMouseMove:{time:true,price:true}}});
   /* 價格範圍：K 棒之外，也把前日價位和進出場價包進來（和舊圖一樣） */
-  const extra=[...LEVELS.map(l=>l[0]),...FILLS.flatMap(f=>[f[3],f[5]])];
+  /* 離當天價格太遠的前日價位不撐大範圍（不然當天 K 棒會被壓扁），線還是畫，捲過去看得到 */
+  const dlo=BARS.length?Math.min(...BARS.map(b=>b[2])):-Infinity,dhi=BARS.length?Math.max(...BARS.map(b=>b[1])):Infinity;
+  const extra=[...LEVELS.map(l=>l[0]).filter(p=>p>=dlo-25&&p<=dhi+25),...FILLS.flatMap(f=>[f[3],f[5]])];
   const cs=chart.addCandlestickSeries({priceScaleId:'right',borderVisible:false,priceLineVisible:false,lastValueVisible:false,
     autoscaleInfoProvider:orig=>{const r=orig();if(!r||!extra.length)return r;r.priceRange.minValue=Math.min(r.priceRange.minValue,...extra)-2;r.priceRange.maxValue=Math.max(r.priceRange.maxValue,...extra)+2;return r}});
   const ema=chart.addLineSeries({priceScaleId:'right',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
@@ -655,9 +665,10 @@ function drawLW(box,day,hov,onPick,tools){
         if(name){g.font=`600 ${10.5*vr}px system-ui, sans-serif`;g.textBaseline='bottom';g.fillStyle=css('--ink');g.fillText(name,x+3*hr,y-hh/2-2*vr)}
         g.font=`${10.5*vr}px "IBM Plex Mono", ui-monospace, monospace`;g.textBaseline='middle';const w=g.measureText(s).width+10*hr;
         g.fillStyle=bg;g.beginPath();g.roundRect?g.roundRect(x,y-hh/2,w,hh,3*hr):g.rect(x,y-hh/2,w,hh);g.fill();g.fillStyle=css('--panel');g.fillText(s,x+5*hr,y+.5*vr)};
-      LEVELS.forEach(([p,t])=>{const y=Y(p);if(y!=null)tag(fmt(p),y,css('--ink-2'),t)});
+      /* 標籤太近（例如昨收和昨低只差幾點）會疊在一起，依序往下推開；線本身還是在原本的價位 */
+      {let last=-1e9;LEVELS.map(([p,t])=>[Y(p),p,t]).filter(([y])=>y!=null).sort((a,b)=>a[0]-b[0]).forEach(([y,p,t])=>{const yy=Math.max(y,last+30*vr);last=yy;tag(fmt(p),yy,css('--ink-2'),t)})}
       g.textBaseline='top';g.font=`${10*vr}px "IBM Plex Mono", ui-monospace, monospace`;
-      if(PREV.length)vline(xAt(T1(0),-1.5),css('--line'),[2,3]);
+      if(PREV.length)vline(xAt(T1(0),-1.5),css('--daysep'),[2,3]);  /* 前一日和當天的分隔線 */
       vline(xAt(T1(78),-.5),css('--line'),[],'收盤');
       if(day.stopMin!=null)vline(xMin(day.stopMin),css('--bear'),[],day.stopLabel||'規則觸發');
       /* 觀察紀錄：最上面一排旗子（太近就往右挪），同一則的每個棒號畫一條點線 */
@@ -695,7 +706,9 @@ function drawLW(box,day,hov,onPick,tools){
   const tip=h('div','lwtip');box.append(tip);
   chart.subscribeCrosshairMove(p=>{const lb=p&&p.time!=null&&p.point?LBL.get(p.time):null;if(lb){tip.textContent=lb.full;const w=tip.offsetWidth||80,pw=ts.width();tip.style.left=Math.min(pw-w/2-2,Math.max(w/2+2,p.point.x))+'px';tip.style.display='block'}else tip.style.display='none'});
   chart.subscribeCrosshairMove(p=>{const v=p&&p.time!=null?BYT.get(p.time):null;if(!v){hov.textContent='滑過 K 棒看開高低收';return}const b=v.b;
-    hov.textContent=`${v.prev?'前一日 ':''}#${v.i+1} ${tlabel(v.i*5)}  開 ${fmt(b[0])} 高 ${fmt(b[1])} 低 ${fmt(b[2])} 收 ${fmt(b[3])}${!v.prev&&b.length>4?'  EMA '+fmt(b[4]):''}`});
+    /* 和開盤練習一樣：收盤價和前一根收盤的漲跌（點數、%），前一日第一根沒有前一根就不顯示 */
+    const pb=v.prev?PREV[v.i-1]:(v.i?BARS[v.i-1]:(day.prevBars||[]).at(-1)),pc=pb?pb[3]:null,d=pc!=null?b[3]-pc:null,sg=x=>(x>=0?'+':'')+x.toFixed(2);
+    hov.innerHTML=`${v.prev?'前一日 ':''}#${v.i+1} ${tlabel(v.i*5)}　開 <b>${fmt(b[0])}</b> 高 <b>${fmt(b[1])}</b> 低 <b>${fmt(b[2])}</b> 收 <b>${fmt(b[3])}</b>`+(d!=null?`　<span style="color:${css(d>=0?'--bull':'--bear')}">${sg(d)}（${sg(d/pc*100)}%）</span>`:'')+(b.length>4&&b[4]!=null?`　<span style="color:${css('--ema')}">EMA ${fmt(b[4])}</span>`:'')});
   const mb=h('button','linkbtn mmb','畫 MM'),mc=h('button','linkbtn','清除 MM');mb.type=mc.type='button';mc.title='清除這一天畫的 MM';
   const upd=()=>{mc.hidden=!MMS.length;mb.textContent=MMMODE?(MMP?'再點 1（終點）':'點 0（起點）'):'畫 MM';mb.classList.toggle('on',MMMODE);box.style.cursor=MMMODE?'crosshair':''};
   const setMode=on=>{MMMODE=on;MMP=null;MMH=null;upd();PRIM.req&&PRIM.req()};
@@ -765,7 +778,7 @@ function renderDay(){navState();
   const tog=h('label','tog');tog.htmlFor='showAll';const cb=document.createElement('input');cb.type='checkbox';cb.id='showAll';cb.checked=showAll;tog.append(cb,document.createTextNode('顯示全部'));head.append(tog);
   const list=h('div');sc.append(head,list);led.append(sc);
   const cp=h('section','panel');const ch=h('div','lwbox');ch.setAttribute('role','img');ch.setAttribute('aria-label',`${day.label||CUR} MES 5 分鐘 K 線與進出場`);
-  const lg=h('div','legend');lg.innerHTML='<span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--bull)"></i>買進</span><span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--bear)"></i>放空</span><span><i style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ink-2);background:var(--panel)"></i>出場</span><span><i style="width:14px;height:2px;background:var(--ema);vertical-align:3px"></i>20 EMA</span><span><i style="width:14px;border-top:1px dashed var(--level);vertical-align:3px"></i>前日價位</span>';
+  const lg=h('div','legend');lg.innerHTML='<span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--bull)"></i>買進</span><span><i style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--bear)"></i>放空</span><span><i style="width:8px;height:8px;border-radius:50%;border:2px solid var(--ink-2);background:var(--panel)"></i>出場</span>';
   const hov=h('span','hover','滑過 K 棒看開高低收');
   if((day.prevBars||[]).length){const tg=h('label','tog');tg.htmlFor='showPrev';const pc=document.createElement('input');pc.type='checkbox';pc.id='showPrev';pc.checked=showPrev;tg.append(pc,document.createTextNode('顯示前一日'));pc.addEventListener('change',()=>{showPrev=pc.checked;try{localStorage.setItem('journal-prev',showPrev?'1':'0')}catch(e){}renderDay()});lg.append(tg)}
   /* 觀察紀錄的旗子開關（這天有寫 # 棒號才出現） */
@@ -1434,7 +1447,9 @@ function renderPre(){
 function fillSelect(){const sel=$('daySel'),ds=Object.keys(DAYS).sort().reverse();sel.replaceChildren();if(!ds.length){sel.append(new Option('尚無資料',''));sel.disabled=true;return}ds.forEach(d=>sel.append(new Option(DAYS[d].label||d,d)));sel.disabled=false;if(!CUR||!DAYS[CUR])CUR=ds[0];sel.value=CUR}
 $('daySel').addEventListener('change',e=>{CUR=e.target.value;renderDay()});
 /* 前一天／下一天（照日期先後） */
-function navState(){const ds=Object.keys(DAYS).sort(),i=ds.indexOf(CUR);$('dayPrev').disabled=!(i>0);$('dayNext').disabled=!(i>=0&&i<ds.length-1)}
+function navState(){const ds=Object.keys(DAYS).sort(),i=ds.indexOf(CUR);$('dayPrev').disabled=!(i>0);$('dayNext').disabled=!(i>=0&&i<ds.length-1);$('practiceBtn').href=PRACTICE_URL(CUR)}
+/* 正式版：practice.html?date=這天；雲端版兩頁不在同一個網站，帶不了日期，只開啟雲端的開盤練習 */
+const PRACTICE_URL=d=>/github\.io$|^localhost$|^127\./.test(location.hostname)?'practice.html'+(d?'?date='+encodeURIComponent(d):''):'https://claude.ai/artifact/8Z3rtAbN87ThadcwDHavYe'
 function stepDay(d){const ds=Object.keys(DAYS).sort(),j=ds.indexOf(CUR)+d;if(j<0||j>=ds.length||ds.indexOf(CUR)<0)return;CUR=ds[j];$('daySel').value=CUR;renderDay()}
 $('dayPrev').addEventListener('click',()=>stepDay(-1));$('dayNext').addEventListener('click',()=>stepDay(1));
 

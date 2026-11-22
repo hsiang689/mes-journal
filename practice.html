@@ -688,7 +688,13 @@ applyTheme();
   DB.collection('panswers').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); ANS = Object.assign(m, Q && Q.recId ? { [Q.recId]: Q.rec } : {}); renderStats(); }, () => {});
   DB.collection('pfavs').onSnapshot((q) => { const m = {}; q.docs.forEach(d => { m[d.id] = d.data(); }); FAVS = m; renderFavs(); }, () => {});
   shell();
-  newQuestion();
+  /* 從每日檢討的「到開盤練習重練這天」過來：practice.html?date=YYYY-MM-DD
+     載入那天後直接走「重做這題」同一段程式（redo），所以邏輯和重做完全一樣，只是日期由每日檢討指定 */
+  const want = new URLSearchParams(location.search).get('date');
+  if (want) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  const wi = want ? INDEX.indexOf(want) : -1;
+  if (wi >= DAYS_BEFORE) { await loadQuestion(want, null); if (Q && Q.date === want) { Q.revealed = true; redo(); } }
+  else { await newQuestion(); if (want) flash(`${want.replace(/-/g, '/')} 沒有練習用的 K 線（練習資料從 ${INDEX[DAYS_BEFORE].replace(/-/g, '/')} 到 ${INDEX[INDEX.length - 1].replace(/-/g, '/')}），先給你一題隨機的`); }
 })();
 })();
 </script>
