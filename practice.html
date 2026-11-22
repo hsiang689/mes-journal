@@ -752,15 +752,22 @@ async function loadReplay(date) {
   if (!date) return;
   try { localStorage.setItem('practice-rpdate', date); } catch (e) {}
   MMMODE = false; await loadQuestion(date, null, true);
-  rpFillDays(); rpActual(date).then(() => { if (Q && Q.rp) renderQ(); });
+  rpFillDays(); rpActual(date).then(rpRerender);
 }
 function rpStep(d) { if (!Q) return; const i = INDEX.indexOf(Q.date) + d; if (i >= DAYS_BEFORE && i < INDEX.length) loadReplay(INDEX[i]); }
 /* 每日檢討那天的實際損益（雲端版沒有日誌資料，就不比） */
-async function rpActual(date) {
-  if (ACT.has(date)) return ACT.get(date);
-  let v = null; try { const d = snap(await DB.doc('jdays/' + date).get()); if (d && d.stats) v = { net: d.stats.net, n: (d.pos || []).length }; } catch (e) {}
-  ACT.set(date, v); return v;
+/* 同一天只讀一次（讀取中的也記住），讀完合併成一次重畫；以前每次重畫都會再對還沒讀完的日子發一次請求、讀完又重畫，
+   複測過的日子一多就一直連鎖重畫，整頁卡死 */
+const ACTP = new Map();
+function rpActual(date) {
+  if (!ACTP.has(date)) ACTP.set(date, (async () => {
+    let v = null; try { const d = snap(await DB.doc('jdays/' + date).get()); if (d && d.stats) v = { net: d.stats.net, n: (d.pos || []).length }; } catch (e) {}
+    ACT.set(date, v); return v;
+  })());
+  return ACTP.get(date);
 }
+let RPRR = false;
+const rpRerender = () => { if (RPRR) return; RPRR = true; setTimeout(() => { RPRR = false; if (Q && Q.rp) renderQ(); }, 60); };
 /* 每天最新的一次複測 */
 function rpLatest() { const m = new Map(); Object.values(RPS).forEach(r => { const o = m.get(r.date); if (!o || (r.upd || r.at) > (o.upd || o.at)) m.set(r.date, r); }); return m; }
 function rpFillDays() {
@@ -853,7 +860,7 @@ function renderRP() {
   const m = Q.date.slice(0, 7), last2 = rpLatest(), days = [...last2.values()].filter(x => x.date.slice(0, 7) === m).sort((a, b) => a.date.localeCompare(b.date));
   if (days.length) {
     sum.append(el('h3', null, `${m.replace('-', '/')} 複測總覽（每天取最新一次）`));
-    days.forEach(x => { if (!ACT.has(x.date)) rpActual(x.date).then(() => { if (Q && Q.rp) renderQ(); }); });
+    days.forEach(x => { if (!ACTP.has(x.date)) rpActual(x.date).then(rpRerender); });
     let tr = 0, ta = 0, na = 0;
     const t = el('table'), w = el('div', 'scroll');
     t.innerHTML = '<tr><th>日期</th><th class="n">筆數</th><th class="n">複測損益</th><th class="n">實際損益</th><th class="n">差</th><th></th></tr>' + days.map(x => {
