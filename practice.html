@@ -396,6 +396,26 @@ function makeChart(box) {
     box.addEventListener('click', (ev) => { if (!MMMODE && canDelMM() && inMM(...at(ev))) { MMHOV = true; placeMMDel(); } });
     del.addEventListener('click', (ev) => { ev.stopPropagation(); if (!canDelMM()) return; Q.mm = null; Q.hover = null; MMHOV = false; drawMM(); renderQ(); });
   }
+  /* 複測的停損線：在線附近按下就開始拖（滑鼠、觸控都可以），拖曳時圖表暫停捲動，放開就算設定好 */
+  {
+    const yOf = (ev) => ev.clientY - box.getBoundingClientRect().top;
+    const inPlot = (ev) => { const r = box.getBoundingClientRect(); return ev.clientX - r.left < r.width - chart.priceScale('right').width(); };
+    const lock = (on) => chart.applyOptions(on ? { handleScroll: false, handleScale: false } : { handleScroll: true, handleScale: { mouseWheel: true, pinch: true, axisDoubleClickReset: true, axisPressedMouseMove: { time: true, price: true } } });
+    box.addEventListener('pointerdown', (ev) => {
+      if (!inPlot(ev) || !stopNear(yOf(ev))) return;
+      ev.preventDefault(); ev.stopPropagation(); SDRAG = true; lock(true);
+      try { box.setPointerCapture(ev.pointerId); } catch (e) {}
+    }, true);
+    box.addEventListener('pointermove', (ev) => {
+      if (!SDRAG) { if (!MMMODE) box.style.cursor = inPlot(ev) && stopNear(yOf(ev)) ? 'ns-resize' : ''; return; }
+      ev.preventDefault(); ev.stopPropagation(); setStopAt(yOf(ev));
+    }, true);
+    const end = (ev, ok) => { if (!SDRAG) return; ev.stopPropagation(); SDRAG = false; lock(false);
+      const p = Q && Q.rp && Q.rp.pos; if (p && ok) { setStopAt(yOf(ev)); p.stopOk = true; if (p.sl == null) p.sl = p.stop; } drawStop(); renderQ(); };
+    box.addEventListener('pointerup', (ev) => end(ev, true), true);
+    box.addEventListener('pointercancel', (ev) => end(ev, false), true);
+    ['mousedown', 'touchstart', 'touchmove'].forEach(t => box.addEventListener(t, (ev) => { if (SDRAG) { ev.stopPropagation(); if (t === 'touchmove') ev.preventDefault(); } }, { capture: true, passive: false }));
+  }
   /* 畫 MM：直接聽網頁的點擊（圖表本身的點擊事件，兩下點太快時第二下會被吃掉），算出價位；會吸附到附近 K 棒的開高低收 */
   box.addEventListener('click', (ev) => {
     if (!MMMODE || !Q || Q.revealed) return;
@@ -485,6 +505,7 @@ function buildSeries() {
   ema.setData(e.concat(w));
   sep.setData(s);
   const mk = rpMarkers(); cs.setMarkers(mk); ls.setMarkers(mk);
+  drawStop();
   showOHLC(null);
 }
 function drawLevels() {
@@ -533,7 +554,12 @@ async function loadQuestion(date, review, rp) {
 }
 /* 可以一直看到收盤前（最後要留一根給進場後的結果） */
 const maxN = () => Q.rp ? Q.day.b.length : Math.min(79, Q.day.b.length - 1);
-function nextBar() { if (!Q || Q.revealed || Q.review || Q.n >= maxN() || TF !== 5) return; Q.n++; buildSeries(); renderQ();
+function nextBar() { if (!Q || Q.revealed || Q.review || Q.n >= maxN() || TF !== 5) return;
+  if (Q.rp && Q.rp.pos && !Q.rp.pos.stopOk) { setMsg('先拖曳紅色虛線設定停損，才能看下一根'); return; }
+  Q.n++;
+  /* 複測持倉中：新的這根碰到停損就用停損價出場（跳空越過停損就用開盤價） */
+  if (Q.rp && Q.rp.pos) { const p = Q.rp.pos, b = Q.day.b[Q.n - 1]; if (p.dir > 0 ? b[2] <= p.stop : b[1] >= p.stop) rpClose(p.dir > 0 ? Math.min(p.stop, b[0]) : Math.max(p.stop, b[0]), 'stop'); }
+  buildSeries(); renderQ();
   /* 最新一根快碰到右邊時，畫面往右挪一段 */
   const ts = chart.timeScale(), r = ts.getVisibleLogicalRange(), last = DAYCNT.slice(0, -1).reduce((t, x) => t + x, 0) + DAYCNT[DAYCNT.length - 1] - 1;
   if (r && last > r.to - 4) ts.setVisibleLogicalRange({ from: r.from + 12, to: r.to + 12 });
@@ -817,16 +843,33 @@ function rpFillDays() {
   sel.value = Q.date;
 }
 const curPx = () => Q.day.b[Q.n - 1][3];
+/* 停損：下單後出現一條紅色虛線（先放在進場那根 K 棒另一端外 1 tick），拖到要的位置放開才算設定好，沒設好不能看下一根；
+   之後隨時可以再拖。停損只能放在現價的虧損方向（多單在現價下方、空單在上方） */
+let STOPL = null, SDRAG = false;
+function drawStop() {
+  const p = Q && Q.rp && !Q.rp.done ? Q.rp.pos : null;
+  if (!p || p.stop == null) { if (STOPL) { ema.removePriceLine(STOPL); STOPL = null; } return; }
+  const o = { price: p.stop, color: css('--no'), lineWidth: 2, lineStyle: p.stopOk ? 0 : 2, axisLabelVisible: true, title: p.stopOk ? '停損' : '停損（拖曳設定）' };
+  if (STOPL) STOPL.applyOptions(o); else STOPL = ema.createPriceLine(o);
+}
+const stopNear = (y) => { const p = Q && Q.rp && !Q.rp.done && Q.rp.pos; if (!p || p.stop == null || MMMODE) return false; const sy = ema.priceToCoordinate(p.stop); return sy != null && Math.abs(sy - y) <= 10; };
+function setStopAt(y) {
+  const p = Q && Q.rp && Q.rp.pos; let v = ema.coordinateToPrice(y); if (!p || v == null) return;
+  const c = curPx(); v = tick(v); p.stop = p.dir > 0 ? Math.min(v, c - .25) : Math.max(v, c + .25);
+  drawStop(); renderRPInfo();
+}
 function rpOpen(dir) {
   const r = Q && Q.rp; if (!r || r.pos || r.done) return;
-  const qty = Math.max(1, +document.getElementById('rpQty').value || 1);
-  r.pos = { dir, qty, n0: Q.n, entry: curPx(), note: document.getElementById('note').value.trim() };
+  const qty = Math.max(1, +document.getElementById('rpQty').value || 1), b = Q.day.b[Q.n - 1];
+  r.pos = { dir, qty, n0: Q.n, entry: curPx(), stop: tick(dir > 0 ? b[2] - .25 : b[1] + .25), stopOk: false, note: document.getElementById('note').value.trim() };
   document.getElementById('note').value = ''; buildSeries(); renderQ();
 }
-function rpClose() {
+/* 離場：按「離場」用這根收盤價；碰到停損時用停損價（by = 'stop'） */
+function rpClose(px, by) {
   const r = Q && Q.rp; if (!r || !r.pos) return;
-  const p = r.pos, exit = curPx(), pts = Math.round((exit - p.entry) * p.dir * 100) / 100;
-  const t = { dir: p.dir, qty: p.qty, n0: p.n0, entry: p.entry, n1: Q.n, exit, pts, pnl: Math.round((pts * 5 * p.qty - FEE * p.qty) * 100) / 100, note: [p.note, document.getElementById('note').value.trim()].filter(Boolean).join(' ／ ') };
+  const p = r.pos, exit = typeof px === 'number' ? px : curPx(), pts = Math.round((exit - p.entry) * p.dir * 100) / 100;
+  const t = { dir: p.dir, qty: p.qty, n0: p.n0, entry: p.entry, n1: Q.n, exit, pts, pnl: Math.round((pts * 5 * p.qty - FEE * p.qty) * 100) / 100, sl: p.sl, note: [p.note, document.getElementById('note').value.trim()].filter(Boolean).join(' ／ ') };
+  if (by === 'stop') t.by = 'stop';
   r.trades.push(t); r.pos = null; document.getElementById('note').value = '';
   rpSave(); buildSeries(); renderQ();
 }
@@ -849,15 +892,31 @@ function rpMarkers() {
   if (Q.rp.pos) ent(Q.rp.pos);
   return out.filter(m => m.time != null).sort((a, b) => a.time - b.time);
 }
+/* 持倉、停損、帳面、今天合計（拖停損線時也會更新） */
+function renderRPInfo() {
+  const r = Q.rp, p = r.pos, info = document.getElementById('rpInfo'); if (!info) return; info.innerHTML = '';
+  const real = r.trades.reduce((t, x) => t + x.pnl, 0), un = p ? (curPx() - p.entry) * p.dir * 5 * p.qty - FEE * p.qty : 0;
+  if (p) {
+    const sp = (p.stop - p.entry) * p.dir, sv = sp * 5 * p.qty - FEE * p.qty;
+    info.append(el('span', p.dir > 0 ? 'tag bull' : 'tag bear', `${DIRN[p.dir]} ${p.qty} 口`), el('span', null, `進場 ${f2(p.entry)}（#${p.n0}）`),
+      el('span', 'no', `停損 ${f2(p.stop)}（${sg(sp)} 點，${money(sv)}）${p.stopOk ? '' : '　未設定'}`),
+      el('span', un >= 0 ? 'ok' : 'no', `帳面 ${money(un)}（${sg((curPx() - p.entry) * p.dir)} 點）`));
+  }
+  const ev = evtOf(Q.date);
+  if (ev.length) info.append(el('span', 'warn', '今天有事件：' + ev.map(e => `${e.name} ${e.tw}（#${e.n}）`).join('、')));
+  if (r.trades.length || p) info.append(el('span', real >= 0 ? 'ok' : 'no', `已實現 ${money(real)}（${r.trades.length} 筆）`), el('span', real + un >= 0 ? 'ok' : 'no', `合計 ${money(real + un)}`));
+  if (real + un <= -500) info.append(el('span', 'warn', '已超過每日停損 −$500'));
+}
 function renderRP() {
   const r = Q.rp, done = r.done, p = r.pos, last = Q.n >= maxN();
   document.getElementById('qno').textContent = '複測';
   document.getElementById('qbar').textContent = `已看 #${Q.n}${done ? '　已結束' : ''}`;
   setMsg(done ? '這天已結束，可以重新複測或換一天' : MMMODE ? (Q.mm && Q.mm.p0 != null ? '再點 1（這段走勢的終點）' : '在圖上點 0（這段走勢的起點）')
-    : p ? (last ? '已到最後一根，請離場或按「結束這天」' : '持倉中：按「下一根」看走勢，按「離場」用這根收盤出場')
+    : p && !p.stopOk ? '拖曳紅色虛線設定停損，放開就設定好；設好才能看下一根'
+    : p ? (last ? '已到最後一根，請離場或按「結束這天」' : '持倉中：按「下一根」看走勢，按「離場」用這根收盤出場；停損線可以再拖')
     : (last ? '已到最後一根，按「結束這天」' : `會用 #${Q.n} 收盤價進場：選口數後按買進或放空`));
   const nx = document.getElementById('next');
-  nx.hidden = done; nx.textContent = TF !== 5 ? '切回 5 分才能下一根' : (last ? '已到最後' : `下一根 #${Q.n + 1}`); nx.disabled = done || last || TF !== 5;
+  nx.hidden = done; nx.textContent = TF !== 5 ? '切回 5 分才能下一根' : (last ? '已到最後' : `下一根 #${Q.n + 1}`); nx.disabled = done || last || TF !== 5 || (p && !p.stopOk);
   const mb = document.getElementById('mmb'); mb.disabled = done; mb.textContent = MMMODE ? '取消畫 MM' : (Q.mm && Q.mm.p1 != null ? '重畫 MM' : '畫 MM'); mb.classList.toggle('on', MMMODE);
   document.getElementById('chart').style.cursor = MMMODE ? 'crosshair' : '';
   /* setBusy 載入時會把按鈕都停用，這裡每次都重新設定 */
@@ -869,14 +928,7 @@ function renderRP() {
   const note = document.getElementById('note'); note.disabled = done; note.placeholder = p ? '離場理由（選填）' : '進場理由（選填）';
   const i = INDEX.indexOf(Q.date); document.getElementById('rpPrev').disabled = i <= DAYS_BEFORE; document.getElementById('rpNext').disabled = i >= INDEX.length - 1;
   document.getElementById('res').className = 'res';
-  /* 持倉、帳面、今天合計 */
-  const info = document.getElementById('rpInfo'); info.innerHTML = '';
-  const real = r.trades.reduce((t, x) => t + x.pnl, 0), un = p ? (curPx() - p.entry) * p.dir * 5 * p.qty - FEE * p.qty : 0;
-  if (p) info.append(el('span', p.dir > 0 ? 'tag bull' : 'tag bear', `${DIRN[p.dir]} ${p.qty} 口`), el('span', null, `進場 ${f2(p.entry)}（#${p.n0}）`), el('span', un >= 0 ? 'ok' : 'no', `帳面 ${money(un)}（${sg((curPx() - p.entry) * p.dir)} 點）`));
-  const ev = evtOf(Q.date);
-  if (ev.length) info.append(el('span', 'warn', '今天有事件：' + ev.map(e => `${e.name} ${e.tw}（#${e.n}）`).join('、')));
-  if (r.trades.length || p) info.append(el('span', real >= 0 ? 'ok' : 'no', `已實現 ${money(real)}（${r.trades.length} 筆）`), el('span', real + un >= 0 ? 'ok' : 'no', `合計 ${money(real + un)}`));
-  if (real + un <= -500) info.append(el('span', 'warn', '已超過每日停損 −$500'));
+  renderRPInfo();
   /* 這天的交易、這個月的複測總覽 */
   const sum = document.getElementById('rpSum');
   /* 正在寫某一筆的檢討時不重畫（例如存檔後資料回來），免得打到一半被洗掉 */
@@ -886,7 +938,7 @@ function renderRP() {
     sum.append(el('h3', null, '這次複測的交易'));
     const t = el('table'), w = el('div', 'scroll');
     t.innerHTML = '<tr><th></th><th>方向</th><th class="n">口數</th><th class="n">進場</th><th class="n">出場</th><th class="n">點數</th><th class="n">損益</th><th>理由</th><th>檢討</th></tr>' + r.trades.map((x, j) =>
-      `<tr><td>${j + 1}</td><td class="${x.dir > 0 ? 'ok' : 'no'}">${DIRN[x.dir]}</td><td class="n">${x.qty}</td><td class="n">#${x.n0} ${f2(x.entry)}</td><td class="n">#${x.n1} ${f2(x.exit)}</td><td class="n">${sg(x.pts)}</td><td class="n ${x.pnl >= 0 ? 'ok' : 'no'}">${money(x.pnl)}</td><td class="t"></td><td class="t"></td></tr>`).join('');
+      `<tr><td>${j + 1}</td><td class="${x.dir > 0 ? 'ok' : 'no'}">${DIRN[x.dir]}</td><td class="n">${x.qty}</td><td class="n">#${x.n0} ${f2(x.entry)}</td><td class="n">#${x.n1} ${f2(x.exit)}${x.by === 'stop' ? ' 停損' : ''}</td><td class="n">${sg(x.pts)}</td><td class="n ${x.pnl >= 0 ? 'ok' : 'no'}">${money(x.pnl)}</td><td class="t"></td><td class="t"></td></tr>`).join('');
     r.trades.forEach((x, j) => {
       t.rows[j + 1].cells[7].textContent = x.note || '';
       /* 離場後每一筆旁邊可以寫一句檢討（例如沒遵守哪條規則），離開輸入框或按 Enter 就存 */
