@@ -2010,18 +2010,17 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
   const pipSize=()=>{if(pw)for(const k in SZ)pw.document.documentElement.style.setProperty('--'+k,SZ[k]+'px')};
   {const dlg=document.getElementById('setDlg'),at=dlg&&document.getElementById('setMsg');
     if(at){const fs=document.createElement('fieldset');fs.className='pipsz';
-      fs.innerHTML='<legend>浮動倒數大小（拖動時馬上套用，不用按儲存）</legend>';
+      fs.innerHTML='<legend>浮動倒數大小（px，改完馬上套用，不用按儲存）</legend>';
       const ins={};[['r','進度圈'],['n','棒號'],['t','倒數']].forEach(([k,name])=>{
-        const l=document.createElement('label'),i=document.createElement('input'),o=document.createElement('span');
-        i.type='range';i.min='10';i.max='80';i.step='1';i.value=String(SZ[k]);o.textContent=SZ[k]+'px';ins[k]=[i,o];
-        i.addEventListener('input',()=>{SZ[k]=+i.value;o.textContent=i.value+'px';pipSize();try{localStorage.setItem('mj-pip-size',JSON.stringify(SZ))}catch(e){}});
-        l.append(name,i,o);fs.append(l)});
+        const l=document.createElement('label'),i=document.createElement('input');
+        i.type='number';i.min='8';i.max='120';i.step='1';i.value=String(SZ[k]);ins[k]=i;
+        i.addEventListener('input',()=>{const x=+i.value;if(!(x>=8&&x<=120))return;SZ[k]=x;pipSize();try{localStorage.setItem('mj-pip-size',JSON.stringify(SZ))}catch(e){}});
+        l.append(name,i);fs.append(l)});
       const rs=document.createElement('button');rs.type='button';rs.className='linkbtn';rs.textContent='恢復預設';
-      rs.addEventListener('click',()=>{SZ={...SZ0};for(const k in ins){ins[k][0].value=String(SZ[k]);ins[k][1].textContent=SZ[k]+'px'}pipSize();try{localStorage.removeItem('mj-pip-size')}catch(e){}});
+      rs.addEventListener('click',()=>{SZ={...SZ0};for(const k in ins)ins[k].value=String(SZ[k]);pipSize();try{localStorage.removeItem('mj-pip-size')}catch(e){}});
       fs.append(rs);at.before(fs);
-      css.textContent+='dialog.set .pipsz{border:1px solid var(--line);border-radius:8px;padding:8px 12px 10px;display:grid;gap:6px}dialog.set .pipsz legend{font-size:13px;color:var(--ink-2);padding:0 4px}'
-        +'dialog.set .pipsz label{display:grid;grid-template-columns:4em 1fr 3.5em;align-items:center;gap:8px}dialog.set .pipsz input{padding:0;border:0;background:none;accent-color:var(--warn)}'
-        +'dialog.set .pipsz span{font:500 12px var(--f-mono);color:var(--ink-3);text-align:right}dialog.set .pipsz .linkbtn{justify-self:end}'}}
+      css.textContent+='dialog.set .pipsz{border:1px solid var(--line);border-radius:8px;padding:8px 12px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}dialog.set .pipsz legend{font-size:13px;color:var(--ink-2);padding:0 4px}'
+        +'dialog.set .pipsz label{display:flex;align-items:center;gap:6px}dialog.set .pipsz input{width:5em;padding:4px 6px}dialog.set .pipsz .linkbtn{margin-left:auto}'}}
   const VARS=['--bg','--panel','--ink','--ink-2','--ink-3','--line','--warn','--bear','--f-mono'];
   function pipDraw(){
     if(!pw)return;const d=pw.document,cs=getComputedStyle(document.documentElement);
