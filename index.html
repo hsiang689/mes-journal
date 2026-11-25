@@ -81,7 +81,7 @@ select{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);bord
 .neg{color:var(--bear)}.pos{color:var(--bull)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .chart{padding:10px 8px 4px;overflow-x:auto}
-.over-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 0}.over-nav .linkbtn:disabled{opacity:.4;cursor:default}
+.over-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 0}.over-nav .linkbtn:disabled{opacity:.4;cursor:default}.over-nav.bot{padding:10px 12px}
 .chart svg{display:block;width:100%;min-width:640px;height:auto}
 .lwbox{position:relative;height:min(68vh,620px);min-height:380px;padding:0;overflow:hidden}
 .autob{position:absolute;right:6px;bottom:4px;z-index:3;font:11px var(--f-mono);line-height:18px;padding:0 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink-3);cursor:pointer}
@@ -866,10 +866,13 @@ function renderOver(){
   const cp=h('section','panel');
   const pages=Math.max(1,Math.ceil(ds.length/OVERN));OVEROFF=Math.min(OVEROFF,pages-1);
   const asc=ds.slice(OVEROFF*OVERN,(OVEROFF+1)*OVERN).reverse();
-  {const nav=h('div','over-nav'),pv=h('button','linkbtn','◀ 前 '+OVERN+' 天'),nx=h('button','linkbtn','後 '+OVERN+' 天 ▶');pv.type=nx.type='button';
+  /* 換頁列：長條圖上方和表格下方各一條，兩邊同一頁；表格下方那條換頁後捲回長條圖 */
+  const mkNav=(top)=>{const nav=h('div','over-nav'),pv=h('button','linkbtn','◀ 前 '+OVERN+' 天'),nx=h('button','linkbtn','後 '+OVERN+' 天 ▶');pv.type=nx.type='button';
     pv.disabled=OVEROFF>=pages-1;nx.disabled=OVEROFF===0;
-    pv.addEventListener('click',()=>{OVEROFF++;renderOver()});nx.addEventListener('click',()=>{OVEROFF--;renderOver()});
-    const md=x=>x.slice(5).replace('-','/');nav.append(pv,h('span','sub',`${md(asc[0].date)}～${md(asc[asc.length-1].date)}（${asc.length} 天）`),nx);cp.append(nav)}
+    const go=d=>{OVEROFF+=d;renderOver();if(!top)$('overBody').querySelector('.over-nav')?.scrollIntoView({block:'start'})};
+    pv.addEventListener('click',()=>go(1));nx.addEventListener('click',()=>go(-1));
+    const md=x=>x.slice(5).replace('-','/');nav.append(pv,h('span','sub',`${md(asc[0].date)}～${md(asc[asc.length-1].date)}（${asc.length} 天）`),nx);return nav};
+  cp.append(mkNav(true));
   const ch=h('div','chart');const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 1000 234');svg.setAttribute('role','img');svg.setAttribute('aria-label','每日淨損益長條圖');ch.append(svg);cp.append(ch);
   const el=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.appendChild(e);return e};
   const vals=asc.map(d=>(d.stats||{}).net||0),mn=Math.min(-550,...vals),mx=Math.max(100,...vals),L=60,R=980,T=16,B=190,Y=v=>T+(mx-v)/(mx-mn)*(B-T),bw=Math.min(40,(R-L)/Math.max(asc.length,1)*0.6);
@@ -885,12 +888,12 @@ function renderOver(){
   const tp=h('section','panel tbl-wrap'),tb=h('table','days');
   tb.innerHTML='<thead><tr><th>交易日</th><th class="num">淨損益</th><th class="num">部位</th><th class="num">最大口數</th><th>規則觸發</th><th class="num">觸發後部位</th><th class="num">觸發後損益</th><th class="num">已寫檢討</th></tr></thead>';
   const tbody=h('tbody');
-  ds.forEach(d=>{const s=d.stats||{},n=(d.pos||[]).length,rv=(d.pos||[]).filter((p,k)=>String((REV[memoId(d.date,k)]||{}).text||'').trim()).length;
+  [...asc].reverse().forEach(d=>{const s=d.stats||{},n=(d.pos||[]).length,rv=(d.pos||[]).filter((p,k)=>String((REV[memoId(d.date,k)]||{}).text||'').trim()).length;
     const tr=h('tr','link');tr.tabIndex=0;
     const td=(t,c)=>{const x=h('td',c||'',t);tr.append(x);return x};
     td(d.label||d.date);td(money(s.net||0),'num '+((s.net||0)<0?'neg':'pos'));td(String(n),'num');td(String(s.maxLots||0),'num'+((s.maxLots||0)>1?' neg':''));td(s.ruleTime?`${s.ruleTime}　${s.ruleText||''}`:'未觸發',s.ruleTime?'neg':'pos');td(String(s.afterStop||0),'num');td(s.afterStop?money(s.afterStopNet||0):'—','num');td(`${rv} / ${n}`,'num');
     const go=()=>{CUR=d.date;$('daySel').value=CUR;renderDay();showTab('tab-day');scrollTo(0,0)};tr.addEventListener('click',go);tr.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();go()}});tbody.append(tr)});
-  tb.append(tbody);tp.append(tb);wrap.append(tp);
+  tb.append(tbody);tp.append(tb);if(pages>1){const nb=mkNav(false);nb.classList.add('bot');tp.append(nb)}wrap.append(tp);
   body.append(wrap);
 }
 
