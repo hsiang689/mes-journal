@@ -1938,7 +1938,10 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
   const btn=document.createElement('button');btn.type='button';btn.className='bell';
   const vol=document.createElement('input');vol.type='range';vol.className='bell-v';vol.min='0';vol.max='200';vol.step='10';vol.setAttribute('aria-label','提醒音量');
   const pct=document.createElement('span');pct.className='bell-p';
-  wrap.append(btn,vol,pct);host.append(wrap);
+  /* 浮動倒數：Chrome／Edge 的「文件子母畫面」開一個永遠在最上層的小視窗，可以拖到 TopstepX 上面 */
+  const pipB=document.createElement('button');pipB.type='button';pipB.className='bell';pipB.textContent='⧉';pipB.title='把 K 棒倒數放到浮動小視窗（會停在其他程式上面）';pipB.setAttribute('aria-label','浮動倒數視窗');
+  pipB.hidden=!('documentPictureInPicture' in window);
+  wrap.append(btn,pipB,vol,pct);host.append(wrap);
   let v=100;try{const x=+localStorage.getItem('mj-bell-vol');if(localStorage.getItem('mj-bell-vol')!==null&&x>=0&&x<=200)v=x}catch(e){}
   vol.value=String(v);
   let on=false;try{on=localStorage.getItem('mj-bell')==='1'}catch(e){}
@@ -1999,6 +2002,34 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
   const kick=()=>{if(on&&(!ctx||ctx.state!=='running'))start(false)};
   ['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,kick,{capture:true}));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
+  /* 浮動倒數視窗：和提醒開關無關，開著就一直倒數；計時用小視窗自己的計時器（它看得見，不會被瀏覽器節流） */
+  let pw=null;
+  const VARS=['--bg','--panel','--ink','--ink-2','--ink-3','--line','--warn','--bear','--f-mono'];
+  function pipDraw(){
+    if(!pw)return;const d=pw.document,cs=getComputedStyle(document.documentElement);
+    VARS.forEach(k=>d.documentElement.style.setProperty(k,cs.getPropertyValue(k)));
+    const now=Date.now(),c=Math.floor(now/3e5)*3e5+3e5,box=d.getElementById('pp');
+    if(isBar(c)){const r=Math.min(300,Math.ceil((c-now)/1e3)),C=50.27;box.classList.toggle('hot',r<=LEAD);
+      d.getElementById('fg').setAttribute('stroke-dashoffset',(C*r/300).toFixed(2));d.getElementById('pn').textContent='#'+barNo(c);d.getElementById('pt').textContent=mmss(r)}
+    else{let t=c;for(let i=0;i<1500&&!isBar(t);i++)t+=3e5;box.classList.remove('hot');d.getElementById('fg').setAttribute('stroke-dashoffset','50.27');
+      d.getElementById('pn').textContent='開盤';d.getElementById('pt').textContent=isBar(t)?hm(t-3e5):'—'}
+    pw.setTimeout(pipDraw,1005-Date.now()%1000);
+  }
+  pipB.addEventListener('click',async()=>{
+    if(pw){pw.close();return}
+    try{pw=await documentPictureInPicture.requestWindow({width:190,height:56})}
+    catch(e){pw=null;pipB.textContent='⧉ 這裡開不了，請在正式網站用電腦版 Chrome／Edge';setTimeout(()=>{pipB.textContent='⧉'},5000);return}
+    const d=pw.document;d.title='K 棒倒數';
+    const st=d.createElement('style');
+    st.textContent='html,body{margin:0;height:100%;background:var(--panel);color:var(--ink)}'
+      +'#pp{height:100%;display:flex;align-items:center;justify-content:center;gap:10px;font:600 22px var(--f-mono);font-variant-numeric:tabular-nums}'
+      +'svg{width:24px;height:24px;transform:rotate(-90deg)}circle{fill:none;stroke:var(--line);stroke-width:2.6}#fg{stroke:var(--warn);stroke-linecap:round}'
+      +'#pn{color:var(--ink-2);font-size:17px}#pp.hot{background:color-mix(in srgb,var(--bear) 18%,var(--panel));color:var(--bear)}#pp.hot #fg{stroke:var(--bear)}';
+    d.head.append(st);
+    d.body.innerHTML='<div id="pp"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle id="fg" cx="10" cy="10" r="8" stroke-dasharray="50.27"/></svg><span id="pn"></span><span id="pt"></span></div>';
+    pw.addEventListener('pagehide',()=>{pw=null;pipB.classList.remove('on')});
+    pipB.classList.add('on');pipDraw();
+  });
   label();if(on)start(false);
 })();
 </script>
