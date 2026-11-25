@@ -847,8 +847,8 @@ function renderDay(){navState();
 }
 
 /* overview */
-/* 趨勢總覽長條圖一次只畫 OVERN 個交易日，OVEROFF = 往前翻了幾段（0 = 最近） */
-const OVERN=30;let OVEROFF=0;
+/* 趨勢總覽一次看一個月（長條圖和表格同一個月），OVEROFF = 往前翻了幾個月（0 = 最近有交易的月） */
+let OVEROFF=0;
 function renderOver(){
   const body=$('overBody');body.replaceChildren();
   const ds=Object.values(DAYS).sort((a,b)=>a.date<b.date?1:-1);
@@ -864,14 +864,15 @@ function renderOver(){
   card('已寫檢討',String(reviewed),`/ ${allp} 個部位`);
   wrap.append(stats);
   const cp=h('section','panel');
-  const pages=Math.max(1,Math.ceil(ds.length/OVERN));OVEROFF=Math.min(OVEROFF,pages-1);
-  const asc=ds.slice(OVEROFF*OVERN,(OVEROFF+1)*OVERN).reverse();
-  /* 換頁列：長條圖上方和表格下方各一條，兩邊同一頁；表格下方那條換頁後捲回長條圖 */
-  const mkNav=(top)=>{const nav=h('div','over-nav'),pv=h('button','linkbtn','◀ 前 '+OVERN+' 天'),nx=h('button','linkbtn','後 '+OVERN+' 天 ▶');pv.type=nx.type='button';
+  const months=[...new Set(ds.map(d=>d.date.slice(0,7)))],pages=months.length;OVEROFF=Math.min(OVEROFF,pages-1);
+  const mon=months[OVEROFF],asc=ds.filter(d=>d.date.startsWith(mon)).reverse();
+  /* 換月列：長條圖上方和表格下方各一條，兩邊同一個月；表格下方那條換月後捲回長條圖 */
+  const mkNav=(top)=>{const nav=h('div','over-nav'),pv=h('button','linkbtn','◀ 上個月'),nx=h('button','linkbtn','下個月 ▶');pv.type=nx.type='button';
     pv.disabled=OVEROFF>=pages-1;nx.disabled=OVEROFF===0;
     const go=d=>{OVEROFF+=d;renderOver();if(!top)$('overBody').querySelector('.over-nav')?.scrollIntoView({block:'start'})};
     pv.addEventListener('click',()=>go(1));nx.addEventListener('click',()=>go(-1));
-    const md=x=>x.slice(5).replace('-','/');nav.append(pv,h('span','sub',`${md(asc[0].date)}～${md(asc[asc.length-1].date)}（${asc.length} 天）`),nx);return nav};
+    const mnet=asc.reduce((a,d)=>a+((d.stats||{}).net||0),0),mid=h('span','sub',`${mon.slice(0,4)} 年 ${+mon.slice(5)} 月　${asc.length} 個交易日　`);mid.append(h('span',mnet<0?'neg':'pos',money(mnet)));
+    nav.append(pv,mid,nx);return nav};
   cp.append(mkNav(true));
   const ch=h('div','chart');const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 1000 234');svg.setAttribute('role','img');svg.setAttribute('aria-label','每日淨損益長條圖');ch.append(svg);cp.append(ch);
   const el=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.appendChild(e);return e};
