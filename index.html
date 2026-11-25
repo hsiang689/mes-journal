@@ -864,7 +864,13 @@ function renderOver(){
   const el=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.appendChild(e);return e};
   const asc=[...ds].reverse(),vals=asc.map(d=>(d.stats||{}).net||0),mn=Math.min(-550,...vals),mx=Math.max(100,...vals),L=60,R=980,T=16,B=190,Y=v=>T+(mx-v)/(mx-mn)*(B-T),bw=Math.min(40,(R-L)/Math.max(asc.length,1)*0.6);
   [[0,'0'],[-500,'-500']].forEach(([v,t])=>{el('line',{x1:L,x2:R,y1:Y(v),y2:Y(v),stroke:v?'var(--bear)':'var(--line)','stroke-dasharray':v?'4 3':''});el('text',{x:L-6,y:Y(v)+4,'text-anchor':'end','font-size':11,'font-family':'var(--f-mono)',fill:v?'var(--bear)':'var(--ink-3)'},t)});
-  asc.forEach((d,i)=>{const v=vals[i],cx=L+(R-L)*(i+.5)/asc.length,y0=Y(0),y1=Y(v);el('rect',{x:cx-bw/2,y:Math.min(y0,y1),width:bw,height:Math.max(1,Math.abs(y1-y0)),fill:v<0?'var(--bear)':'var(--bull)',rx:3});el('text',{x:cx,y:B+18,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},d.date.slice(5).replace('-','/'));el('text',{x:cx,y:v<0?y1+14:y1-5,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},Math.round(v))});
+  /* 天數多時：日期每隔幾天標一個（最後一天一定標），金額太擠就不標，滑到長條上看日期和金額 */
+  const slot=(R-L)/Math.max(asc.length,1),every=Math.ceil(44/slot),showV=slot>=34;
+  asc.forEach((d,i)=>{const v=vals[i],cx=L+(R-L)*(i+.5)/asc.length,y0=Y(0),y1=Y(v),md=d.date.slice(5).replace('-','/');
+    const r=el('rect',{x:cx-bw/2,y:Math.min(y0,y1),width:bw,height:Math.max(1,Math.abs(y1-y0)),fill:v<0?'var(--bear)':'var(--bull)',rx:Math.min(3,bw/3)});
+    const tt=document.createElementNS(NS,'title');tt.textContent=`${md}　${money(v)}`;r.append(tt);
+    if((asc.length-1-i)%every===0)el('text',{x:cx,y:B+18,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},md);
+    if(showV)el('text',{x:cx,y:v<0?y1+14:y1-5,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},Math.round(v))});
   wrap.append(cp);
   const tp=h('section','panel tbl-wrap'),tb=h('table','days');
   tb.innerHTML='<thead><tr><th>交易日</th><th class="num">淨損益</th><th class="num">部位</th><th class="num">最大口數</th><th>規則觸發</th><th class="num">觸發後部位</th><th class="num">觸發後損益</th><th class="num">已寫檢討</th></tr></thead>';
