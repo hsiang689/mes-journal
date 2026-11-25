@@ -81,6 +81,7 @@ select{font:500 14px var(--f-mono);color:var(--ink);background:var(--panel);bord
 .neg{color:var(--bear)}.pos{color:var(--bull)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
 .chart{padding:10px 8px 4px;overflow-x:auto}
+.over-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 0}.over-nav .linkbtn:disabled{opacity:.4;cursor:default}
 .chart svg{display:block;width:100%;min-width:640px;height:auto}
 .lwbox{position:relative;height:min(68vh,620px);min-height:380px;padding:0;overflow:hidden}
 .autob{position:absolute;right:6px;bottom:4px;z-index:3;font:11px var(--f-mono);line-height:18px;padding:0 7px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink-3);cursor:pointer}
@@ -846,6 +847,8 @@ function renderDay(){navState();
 }
 
 /* overview */
+/* 趨勢總覽長條圖一次只畫 OVERN 個交易日，OVEROFF = 往前翻了幾段（0 = 最近） */
+const OVERN=30;let OVEROFF=0;
 function renderOver(){
   const body=$('overBody');body.replaceChildren();
   const ds=Object.values(DAYS).sort((a,b)=>a.date<b.date?1:-1);
@@ -860,17 +863,24 @@ function renderOver(){
   const reviewed=ds.reduce((a,d)=>a+(d.pos||[]).filter((p,k)=>String((REV[memoId(d.date,k)]||{}).text||'').trim()).length,0),allp=ds.reduce((a,d)=>a+(d.pos||[]).length,0);
   card('已寫檢討',String(reviewed),`/ ${allp} 個部位`);
   wrap.append(stats);
-  const cp=h('section','panel');const ch=h('div','chart');const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 1000 220');svg.setAttribute('role','img');svg.setAttribute('aria-label','每日淨損益長條圖');ch.append(svg);cp.append(ch);
+  const cp=h('section','panel');
+  const pages=Math.max(1,Math.ceil(ds.length/OVERN));OVEROFF=Math.min(OVEROFF,pages-1);
+  const asc=ds.slice(OVEROFF*OVERN,(OVEROFF+1)*OVERN).reverse();
+  {const nav=h('div','over-nav'),pv=h('button','linkbtn','◀ 前 '+OVERN+' 天'),nx=h('button','linkbtn','後 '+OVERN+' 天 ▶');pv.type=nx.type='button';
+    pv.disabled=OVEROFF>=pages-1;nx.disabled=OVEROFF===0;
+    pv.addEventListener('click',()=>{OVEROFF++;renderOver()});nx.addEventListener('click',()=>{OVEROFF--;renderOver()});
+    const md=x=>x.slice(5).replace('-','/');nav.append(pv,h('span','sub',`${md(asc[0].date)}～${md(asc[asc.length-1].date)}（${asc.length} 天）`),nx);cp.append(nav)}
+  const ch=h('div','chart');const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 1000 234');svg.setAttribute('role','img');svg.setAttribute('aria-label','每日淨損益長條圖');ch.append(svg);cp.append(ch);
   const el=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.appendChild(e);return e};
-  const asc=[...ds].reverse(),vals=asc.map(d=>(d.stats||{}).net||0),mn=Math.min(-550,...vals),mx=Math.max(100,...vals),L=60,R=980,T=16,B=190,Y=v=>T+(mx-v)/(mx-mn)*(B-T),bw=Math.min(40,(R-L)/Math.max(asc.length,1)*0.6);
+  const vals=asc.map(d=>(d.stats||{}).net||0),mn=Math.min(-550,...vals),mx=Math.max(100,...vals),L=60,R=980,T=16,B=190,Y=v=>T+(mx-v)/(mx-mn)*(B-T),bw=Math.min(40,(R-L)/Math.max(asc.length,1)*0.6);
   [[0,'0'],[-500,'-500']].forEach(([v,t])=>{el('line',{x1:L,x2:R,y1:Y(v),y2:Y(v),stroke:v?'var(--bear)':'var(--line)','stroke-dasharray':v?'4 3':''});el('text',{x:L-6,y:Y(v)+4,'text-anchor':'end','font-size':11,'font-family':'var(--f-mono)',fill:v?'var(--bear)':'var(--ink-3)'},t)});
-  /* 天數多時：日期每隔幾天標一個（最後一天一定標），金額太擠就不標，滑到長條上看日期和金額 */
-  const slot=(R-L)/Math.max(asc.length,1),every=Math.ceil(44/slot),showV=slot>=34;
+  /* 日期太擠就每隔幾天標一個（最後一天一定標），金額太擠就不標；滑到長條上看日期和金額 */
+  const slot=(R-L)/Math.max(asc.length,1),every=Math.ceil(44/slot),showV=slot>=28;
   asc.forEach((d,i)=>{const v=vals[i],cx=L+(R-L)*(i+.5)/asc.length,y0=Y(0),y1=Y(v),md=d.date.slice(5).replace('-','/');
     const r=el('rect',{x:cx-bw/2,y:Math.min(y0,y1),width:bw,height:Math.max(1,Math.abs(y1-y0)),fill:v<0?'var(--bear)':'var(--bull)',rx:Math.min(3,bw/3)});
     const tt=document.createElementNS(NS,'title');tt.textContent=`${md}　${money(v)}`;r.append(tt);
-    if((asc.length-1-i)%every===0)el('text',{x:cx,y:B+18,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},md);
-    if(showV)el('text',{x:cx,y:v<0?y1+14:y1-5,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},Math.round(v))});
+    if((asc.length-1-i)%every===0)el('text',{x:cx,y:B+34,'text-anchor':'middle','font-size':11,'font-family':'var(--f-mono)',fill:'var(--ink-3)'},md);
+    if(showV)el('text',{x:cx,y:v<0?y1+14:y1-5,'text-anchor':'middle','font-size':10,'font-family':'var(--f-mono)',fill:'var(--ink-2)'},Math.round(v))});
   wrap.append(cp);
   const tp=h('section','panel tbl-wrap'),tb=h('table','days');
   tb.innerHTML='<thead><tr><th>交易日</th><th class="num">淨損益</th><th class="num">部位</th><th class="num">最大口數</th><th>規則觸發</th><th class="num">觸發後部位</th><th class="num">觸發後損益</th><th class="num">已寫檢討</th></tr></thead>';
