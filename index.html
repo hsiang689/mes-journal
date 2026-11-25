@@ -2008,16 +2008,17 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
   let pw=null;
   /* 「設定」裡的 K 棒提醒區：音量和浮動視窗的三個大小（進度圈、棒號、倒數），改完馬上套用，只存在這台電腦 */
   const SZ0={r:34,n:26,t:34};let SZ={...SZ0};
-  try{const x=JSON.parse(localStorage.getItem('mj-pip-size')||'null');if(x)for(const k in SZ0)if(x[k]>=8&&x[k]<=120)SZ[k]=+x[k]}catch(e){}
-  const pipSize=()=>{if(pw)for(const k in SZ)pw.document.documentElement.style.setProperty('--'+k,SZ[k]+'px')};
+  try{const x=JSON.parse(localStorage.getItem('mj-pip-size')||'null');if(x)for(const k in SZ0)if(x[k]>=0&&x[k]<=120)SZ[k]=+x[k]}catch(e){}
+  /* 填 0 就不顯示那一項 */
+  const pipSize=()=>{if(!pw)return;const d=pw.document,el={r:'svg',n:'#pn',t:'#pt'};for(const k in SZ){d.documentElement.style.setProperty('--'+k,SZ[k]+'px');const e=d.querySelector(el[k]);if(e)e.style.display=SZ[k]?'':'none'}};
   {const dlg=document.getElementById('setDlg'),at=dlg&&document.getElementById('setMsg');
     if(at){const fs=document.createElement('fieldset');fs.className='pipsz';
-      fs.innerHTML='<legend>K 棒提醒（改完馬上套用，不用按儲存）</legend>';
+      fs.innerHTML='<legend>K 棒提醒（改完馬上套用，不用按儲存；大小填 0 就不顯示）</legend>';
       {const l=document.createElement('label');l.append('音量 %',vol);const br=document.createElement('i');br.className='br';fs.append(l,br)}
       const ins={};[['r','進度圈 px'],['n','棒號 px'],['t','倒數 px']].forEach(([k,name])=>{
         const l=document.createElement('label'),i=document.createElement('input');
-        i.type='number';i.min='8';i.max='120';i.step='1';i.value=String(SZ[k]);ins[k]=i;
-        i.addEventListener('input',()=>{const x=+i.value;if(!(x>=8&&x<=120))return;SZ[k]=x;pipSize();try{localStorage.setItem('mj-pip-size',JSON.stringify(SZ))}catch(e){}});
+        i.type='number';i.min='0';i.max='120';i.step='1';i.value=String(SZ[k]);ins[k]=i;
+        i.addEventListener('input',()=>{const x=+i.value;if(i.value===''||!(x>=0&&x<=120))return;SZ[k]=x;pipSize();try{localStorage.setItem('mj-pip-size',JSON.stringify(SZ))}catch(e){}});
         l.append(name,i);fs.append(l)});
       const rs=document.createElement('button');rs.type='button';rs.className='linkbtn';rs.textContent='大小恢復預設';
       rs.addEventListener('click',()=>{SZ={...SZ0};for(const k in ins)ins[k].value=String(SZ[k]);pipSize();try{localStorage.removeItem('mj-pip-size')}catch(e){}});
