@@ -2017,14 +2017,15 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
   }
   pipB.addEventListener('click',async()=>{
     if(pw){pw.close();return}
-    try{pw=await documentPictureInPicture.requestWindow({width:190,height:56})}
+    try{pw=await documentPictureInPicture.requestWindow({width:150,height:40})}
     catch(e){pw=null;pipB.textContent='⧉ 這裡開不了，請在正式網站用電腦版 Chrome／Edge';setTimeout(()=>{pipB.textContent='⧉'},5000);return}
     const d=pw.document;d.title='K 棒倒數';
     const st=d.createElement('style');
     st.textContent='html,body{margin:0;height:100%;background:var(--panel);color:var(--ink)}'
-      +'#pp{height:100%;display:flex;align-items:center;justify-content:center;gap:10px;font:600 22px var(--f-mono);font-variant-numeric:tabular-nums}'
-      +'svg{width:24px;height:24px;transform:rotate(-90deg)}circle{fill:none;stroke:var(--line);stroke-width:2.6}#fg{stroke:var(--warn);stroke-linecap:round}'
-      +'#pn{color:var(--ink-2);font-size:17px}#pp.hot{background:color-mix(in srgb,var(--bear) 18%,var(--panel));color:var(--bear)}#pp.hot #fg{stroke:var(--bear)}';
+      /* 字跟著視窗大小縮放：拉大視窗，倒數就跟著變大 */
+      +'#pp{height:100%;display:flex;align-items:center;justify-content:center;gap:.4em;font:600 clamp(14px,min(55vh,14vw),240px) var(--f-mono);font-variant-numeric:tabular-nums}'
+      +'svg{width:1em;height:1em;flex:none;transform:rotate(-90deg)}circle{fill:none;stroke:var(--line);stroke-width:2.6}#fg{stroke:var(--warn);stroke-linecap:round}'
+      +'#pn{color:var(--ink-2);font-size:.75em}#pp.hot{background:color-mix(in srgb,var(--bear) 18%,var(--panel));color:var(--bear)}#pp.hot #fg{stroke:var(--bear)}';
     d.head.append(st);
     d.body.innerHTML='<div id="pp"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle id="fg" cx="10" cy="10" r="8" stroke-dasharray="50.27"/></svg><span id="pn"></span><span id="pt"></span></div>';
     pw.addEventListener('pagehide',()=>{pw=null;pipB.classList.remove('on')});
