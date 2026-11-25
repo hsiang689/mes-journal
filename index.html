@@ -2004,6 +2004,24 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
   /* 浮動倒數視窗：和提醒開關無關，開著就一直倒數；計時用小視窗自己的計時器（它看得見，不會被瀏覽器節流） */
   let pw=null;
+  /* 浮動視窗的三個大小（px）：進度圈、棒號、倒數；放在「設定」裡，拖動時馬上套用，只存在這台電腦 */
+  const SZ0={r:34,n:26,t:34};let SZ={...SZ0};
+  try{const x=JSON.parse(localStorage.getItem('mj-pip-size')||'null');if(x)for(const k in SZ0)if(x[k]>=8&&x[k]<=120)SZ[k]=+x[k]}catch(e){}
+  const pipSize=()=>{if(pw)for(const k in SZ)pw.document.documentElement.style.setProperty('--'+k,SZ[k]+'px')};
+  {const dlg=document.getElementById('setDlg'),at=dlg&&document.getElementById('setMsg');
+    if(at){const fs=document.createElement('fieldset');fs.className='pipsz';
+      fs.innerHTML='<legend>浮動倒數大小（拖動時馬上套用，不用按儲存）</legend>';
+      const ins={};[['r','進度圈'],['n','棒號'],['t','倒數']].forEach(([k,name])=>{
+        const l=document.createElement('label'),i=document.createElement('input'),o=document.createElement('span');
+        i.type='range';i.min='10';i.max='80';i.step='1';i.value=String(SZ[k]);o.textContent=SZ[k]+'px';ins[k]=[i,o];
+        i.addEventListener('input',()=>{SZ[k]=+i.value;o.textContent=i.value+'px';pipSize();try{localStorage.setItem('mj-pip-size',JSON.stringify(SZ))}catch(e){}});
+        l.append(name,i,o);fs.append(l)});
+      const rs=document.createElement('button');rs.type='button';rs.className='linkbtn';rs.textContent='恢復預設';
+      rs.addEventListener('click',()=>{SZ={...SZ0};for(const k in ins){ins[k][0].value=String(SZ[k]);ins[k][1].textContent=SZ[k]+'px'}pipSize();try{localStorage.removeItem('mj-pip-size')}catch(e){}});
+      fs.append(rs);at.before(fs);
+      css.textContent+='dialog.set .pipsz{border:1px solid var(--line);border-radius:8px;padding:8px 12px 10px;display:grid;gap:6px}dialog.set .pipsz legend{font-size:13px;color:var(--ink-2);padding:0 4px}'
+        +'dialog.set .pipsz label{display:grid;grid-template-columns:4em 1fr 3.5em;align-items:center;gap:8px}dialog.set .pipsz input{padding:0;border:0;background:none;accent-color:var(--warn)}'
+        +'dialog.set .pipsz span{font:500 12px var(--f-mono);color:var(--ink-3);text-align:right}dialog.set .pipsz .linkbtn{justify-self:end}'}}
   const VARS=['--bg','--panel','--ink','--ink-2','--ink-3','--line','--warn','--bear','--f-mono'];
   function pipDraw(){
     if(!pw)return;const d=pw.document,cs=getComputedStyle(document.documentElement);
@@ -2022,14 +2040,13 @@ ${extra?'他這次另外說：「'+extra+'」\n':''}要求：
     const d=pw.document;d.title='K 棒倒數';
     const st=d.createElement('style');
     st.textContent='html,body{margin:0;height:100%;background:var(--panel);color:var(--ink)}'
-      /* 字跟著視窗大小縮放：拉大視窗，倒數就跟著變大 */
-      +'#pp{height:100%;display:flex;align-items:center;justify-content:center;gap:.4em;font:600 clamp(14px,min(55vh,14vw),240px) var(--f-mono);font-variant-numeric:tabular-nums}'
-      +'svg{width:1em;height:1em;flex:none;transform:rotate(-90deg)}circle{fill:none;stroke:var(--line);stroke-width:2.6}#fg{stroke:var(--warn);stroke-linecap:round}'
-      +'#pn{color:var(--ink-2);font-size:.75em}#pp.hot{background:color-mix(in srgb,var(--bear) 18%,var(--panel));color:var(--bear)}#pp.hot #fg{stroke:var(--bear)}';
+      +'#pp{height:100%;display:flex;align-items:center;justify-content:center;gap:8px;font:600 var(--t) var(--f-mono);font-variant-numeric:tabular-nums}'
+      +'svg{width:var(--r);height:var(--r);flex:none;transform:rotate(-90deg)}circle{fill:none;stroke:var(--line);stroke-width:2.6}#fg{stroke:var(--warn);stroke-linecap:round}'
+      +'#pn{color:var(--ink-2);font-size:var(--n)}#pp.hot{background:color-mix(in srgb,var(--bear) 18%,var(--panel));color:var(--bear)}#pp.hot #fg{stroke:var(--bear)}';
     d.head.append(st);
     d.body.innerHTML='<div id="pp"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><circle id="fg" cx="10" cy="10" r="8" stroke-dasharray="50.27"/></svg><span id="pn"></span><span id="pt"></span></div>';
     pw.addEventListener('pagehide',()=>{pw=null;pipB.classList.remove('on')});
-    pipB.classList.add('on');pipDraw();
+    pipB.classList.add('on');pipSize();pipDraw();
   });
   label();if(on)start(false);
 })();
